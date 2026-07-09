@@ -1,3 +1,3 @@
-pub mod initialize;
+pub mod create_multisig;
 
-pub use initialize::*;
+pub use create_multisig::*;
