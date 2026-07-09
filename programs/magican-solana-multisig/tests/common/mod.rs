@@ -78,6 +78,19 @@ pub fn create_multisig(
     seed: u64,
 ) -> TxResult {
     let pda = multisig_pda(program_id, &creator.pubkey(), seed);
+    create_multisig_at(svm, program_id, creator, &pda, owners, threshold, seed)
+}
+
+/// Как `create_multisig`, но с явным адресом аккаунта `multisig` — для теста подмены PDA (#8).
+pub fn create_multisig_at(
+    svm: &mut LiteSVM,
+    program_id: &Pubkey,
+    creator: &Keypair,
+    multisig: &Pubkey,
+    owners: &[Pubkey],
+    threshold: u8,
+    seed: u64,
+) -> TxResult {
     let ix = Instruction::new_with_bytes(
         *program_id,
         &magican_solana_multisig::instruction::CreateMultisig {
@@ -87,7 +100,7 @@ pub fn create_multisig(
         }
         .data(),
         magican_solana_multisig::accounts::CreateMultisig {
-            multisig: pda,
+            multisig: *multisig,
             creator: creator.pubkey(),
             system_program: anchor_lang::solana_program::system_program::ID,
         }
@@ -171,6 +184,115 @@ pub fn execute_transaction(
         metas,
     );
     send(svm, ix, executor, &[executor])
+}
+
+// --- SOL-перевод из treasury-PDA (target = SystemProgram) ---
+
+/// Раскладывает перевод SOL из treasury-PDA на (метаданные, данные, remaining).
+pub fn sol_transfer_parts(
+    signer_pda: &Pubkey,
+    recipient: &Pubkey,
+    amount: u64,
+) -> (Vec<TransactionAccount>, Vec<u8>, Vec<AccountMeta>) {
+    let ix = anchor_lang::solana_program::system_instruction::transfer(signer_pda, recipient, amount);
+    let ta = ix
+        .accounts
+        .iter()
+        .map(|m| TransactionAccount {
+            pubkey: m.pubkey,
+            is_signer: m.is_signer,
+            is_writable: m.is_writable,
+        })
+        .collect();
+    let remaining = ix
+        .accounts
+        .iter()
+        .map(|m| AccountMeta {
+            pubkey: m.pubkey,
+            is_signer: false,
+            is_writable: m.is_writable,
+        })
+        .chain(std::iter::once(AccountMeta::new_readonly(
+            anchor_lang::solana_program::system_program::ID,
+            false,
+        )))
+        .collect();
+    (ta, ix.data, remaining)
+}
+
+// --- Governance: сборка вложенной инструкции (target = сам мультисиг) ---
+
+/// Раскладывает inner-инструкцию с контекстом `Auth` (multisig + multisig_signer)
+/// на (метаданные для create_transaction, remaining-аккаунты для execute).
+/// program-получатель CPI — сам наш мультисиг.
+fn auth_ix_parts(
+    program_id: &Pubkey,
+    multisig: &Pubkey,
+    signer_pda: &Pubkey,
+) -> (Vec<TransactionAccount>, Vec<AccountMeta>) {
+    let ta = vec![
+        TransactionAccount {
+            pubkey: *multisig,
+            is_signer: false,
+            is_writable: true,
+        },
+        TransactionAccount {
+            pubkey: *signer_pda,
+            is_signer: true,
+            is_writable: false,
+        },
+    ];
+    // На внешнем уровне PDA не подписывает; плюс сама программа-получатель CPI.
+    let remaining = vec![
+        AccountMeta::new(*multisig, false),
+        AccountMeta::new_readonly(*signer_pda, false),
+        AccountMeta::new_readonly(*program_id, false),
+    ];
+    (ta, remaining)
+}
+
+pub fn set_owners_parts(
+    program_id: &Pubkey,
+    multisig: &Pubkey,
+    signer_pda: &Pubkey,
+    new_owners: Vec<Pubkey>,
+) -> (Vec<TransactionAccount>, Vec<u8>, Vec<AccountMeta>) {
+    let (ta, remaining) = auth_ix_parts(program_id, multisig, signer_pda);
+    let data = magican_solana_multisig::instruction::SetOwners { owners: new_owners }.data();
+    (ta, data, remaining)
+}
+
+pub fn change_threshold_parts(
+    program_id: &Pubkey,
+    multisig: &Pubkey,
+    signer_pda: &Pubkey,
+    new_threshold: u8,
+) -> (Vec<TransactionAccount>, Vec<u8>, Vec<AccountMeta>) {
+    let (ta, remaining) = auth_ix_parts(program_id, multisig, signer_pda);
+    let data = magican_solana_multisig::instruction::ChangeThreshold {
+        threshold: new_threshold,
+    }
+    .data();
+    (ta, data, remaining)
+}
+
+// --- Проверка ошибок ---
+
+/// Утверждает, что транзакция упала, а сообщение/логи содержат `needle`
+/// (имя Anchor-ошибки в логах или строка рантайм-ошибки). Печатает фактическую
+/// ошибку при несовпадении — чтобы тест не «зеленел» по неправильной причине.
+pub fn assert_err_log(res: TxResult, needle: &str) {
+    match res {
+        Ok(_) => panic!("ожидался провал с '{needle}', но транзакция прошла"),
+        Err(e) => {
+            let logs = e.meta.logs.join("\n");
+            let err = format!("{:?}", e.err);
+            assert!(
+                logs.contains(needle) || err.contains(needle),
+                "ожидалась ошибка с '{needle}', получено err={err}\nлоги:\n{logs}"
+            );
+        }
+    }
 }
 
 // --- Чтение state ---

@@ -1,48 +1,10 @@
 mod common;
 
 use anchor_lang::prelude::Pubkey;
-use anchor_lang::solana_program::instruction::AccountMeta;
-use anchor_lang::solana_program::system_instruction;
 use anchor_lang::solana_program::system_program;
 use common::*;
-use magican_solana_multisig::TransactionAccount;
 use solana_keypair::Keypair;
 use solana_signer::Signer;
-
-/// Строит вложенную инструкцию перевода SOL из treasury-PDA и раскладывает её
-/// на (метаданные для create_transaction, данные, remaining-аккаунты для execute).
-fn build_sol_transfer(
-    signer_pda: &Pubkey,
-    recipient: &Pubkey,
-    amount: u64,
-) -> (Vec<TransactionAccount>, Vec<u8>, Vec<AccountMeta>) {
-    let ix = system_instruction::transfer(signer_pda, recipient, amount);
-    let ta = ix
-        .accounts
-        .iter()
-        .map(|m| TransactionAccount {
-            pubkey: m.pubkey,
-            is_signer: m.is_signer,
-            is_writable: m.is_writable,
-        })
-        .collect();
-    // На внешнем уровне PDA не подписывает (is_signer=false) — подпись только внутри
-    // через invoke_signed. Плюс сама программа-получатель CPI.
-    let remaining = ix
-        .accounts
-        .iter()
-        .map(|m| AccountMeta {
-            pubkey: m.pubkey,
-            is_signer: false,
-            is_writable: m.is_writable,
-        })
-        .chain(std::iter::once(AccountMeta::new_readonly(
-            system_program::ID,
-            false,
-        )))
-        .collect();
-    (ta, ix.data, remaining)
-}
 
 #[test]
 fn test_2_of_3_sol_transfer_from_pda_treasury() {
@@ -63,7 +25,7 @@ fn test_2_of_3_sol_transfer_from_pda_treasury() {
 
     let recipient = Pubkey::new_unique();
     let amount = 1_000_000_000;
-    let (ta, data, remaining) = build_sol_transfer(&signer_pda, &recipient, amount);
+    let (ta, data, remaining) = sol_transfer_parts(&signer_pda, &recipient, amount);
 
     // Предложение (index 0). Автоголос owner1 → одобрений 1.
     create_transaction(
@@ -130,7 +92,7 @@ fn test_approve_is_idempotent() {
     let (signer_pda, _) = multisig_signer_pda(&program_id, &multisig);
 
     let recipient = Pubkey::new_unique();
-    let (ta, data, _) = build_sol_transfer(&signer_pda, &recipient, 1);
+    let (ta, data, _) = sol_transfer_parts(&signer_pda, &recipient, 1);
     create_transaction(
         &mut svm,
         &program_id,

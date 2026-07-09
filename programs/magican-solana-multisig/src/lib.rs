@@ -46,4 +46,15 @@ pub mod magican_solana_multisig {
     pub fn execute_transaction(ctx: Context<ExecuteTransaction>) -> Result<()> {
         execute_transaction::handler(ctx)
     }
+
+    /// Меняет набор владельцев и инкрементирует `owner_set_seqno`.
+    /// Доступно только через self-CPI из `execute_transaction` (см. `Auth`).
+    pub fn set_owners(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
+        governance::set_owners(ctx, owners)
+    }
+
+    /// Меняет порог. Доступно только через self-CPI из `execute_transaction`.
+    pub fn change_threshold(ctx: Context<Auth>, threshold: u8) -> Result<()> {
+        governance::change_threshold(ctx, threshold)
+    }
 }
