@@ -24,4 +24,26 @@ pub mod magican_solana_multisig {
     ) -> Result<()> {
         create_multisig::handler(ctx, owners, threshold, seed)
     }
+
+    /// Создаёт предложение (одна вложенная инструкция) и ставит автоголос proposer'а.
+    /// Вызывать может только владелец.
+    pub fn create_transaction(
+        ctx: Context<CreateTransaction>,
+        program_id: Pubkey,
+        accounts: Vec<TransactionAccount>,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        create_transaction::handler(ctx, program_id, accounts, data)
+    }
+
+    /// Ставит голос владельца за предложение (идемпотентно).
+    pub fn approve(ctx: Context<Approve>) -> Result<()> {
+        approve::handler(ctx)
+    }
+
+    /// Исполняет предложение через `invoke_signed`, если одобрений >= threshold.
+    /// Целевые аккаунты и программа передаются как remaining_accounts.
+    pub fn execute_transaction(ctx: Context<ExecuteTransaction>) -> Result<()> {
+        execute_transaction::handler(ctx)
+    }
 }

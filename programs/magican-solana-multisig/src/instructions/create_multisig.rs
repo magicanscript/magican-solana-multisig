@@ -29,6 +29,10 @@ pub fn handler(
 ) -> Result<()> {
     assert_valid_owners_and_threshold(&owners, threshold)?;
 
+    // Канонический bump treasury/authority PDA (seeds = [multisig.key()]).
+    let (_signer, signer_bump) =
+        Pubkey::find_program_address(&[ctx.accounts.multisig.key().as_ref()], ctx.program_id);
+
     let multisig = &mut ctx.accounts.multisig;
     multisig.creator = ctx.accounts.creator.key();
     multisig.seed = seed;
@@ -37,6 +41,7 @@ pub fn handler(
     multisig.owner_set_seqno = 0;
     multisig.transaction_count = 0;
     multisig.bump = ctx.bumps.multisig;
+    multisig.signer_bump = signer_bump;
 
     Ok(())
 }

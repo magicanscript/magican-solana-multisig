@@ -24,8 +24,13 @@ pub struct Multisig {
     pub owner_set_seqno: u32,
     /// Счётчик для деривации PDA транзакций.
     pub transaction_count: u64,
-    /// Канонический bump PDA.
+    /// Канонический bump самого PDA данных `Multisig`.
     pub bump: u8,
+    /// Канонический bump treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
+    /// Это System-owned PDA-казна: держит средства и подписывает вложенные инструкции
+    /// через `invoke_signed`. Отделён от аккаунта данных, т.к. `SystemProgram.transfer`
+    /// требует System-владения source-аккаунта.
+    pub signer_bump: u8,
 }
 
 /// Предложение (одна вложенная инструкция), проходящее процедуру голосования.
