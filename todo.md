@@ -44,16 +44,19 @@
 
 ## 🔜 Предстоит
 
-### Фаза 4.5 — Security-hardening (по итогам `docs/audit.md`)
-- [ ] **F2**: `change_threshold` должен инкрементировать `owner_set_seqno` (+ тест) — быстрый выигрыш
-- [ ] **F1** (opt-in): проверка апгрейда целевой программы — поле `slot` при create, сверка с `ProgramData` в execute
-- [ ] Задокументировать F4/F5 (remaining_accounts / arbitrary CPI) как осознанный design trade-off
-- [ ] (опц.) CU-бенчмарк `execute_transaction` (Mollusk `MolluskComputeUnitBencher`)
+### Фаза 4.5 — Security-hardening (по итогам `docs/audit.md`) — ✅ закрыта 2026-07-13
+- [x] **F2**: `change_threshold` инкрементирует `owner_set_seqno` (+ тест `test_change_threshold_invalidates_pending_proposal`, покрывает понижение порога)
+- [x] **F1/F4/F5**: решение — документируем как осознанный design trade-off (путь Squads: off-chain warning, не жёсткая on-chain проверка). Обоснование — раздел «Осознанные design trade-offs» в `docs/audit.md`
+- [ ] (перенос в Фазу 7) Вынести сжатый раздел «Security model & design trade-offs» в README
+- [ ] (перенос в Фазу 7) Решить: сделать ли `docs/audit.md` трекаемым git (сейчас в `.gitignore`, как и не должно быть для портфолио-витрины security)
+- [ ] (опц., отложено) CU-бенчмарк `execute_transaction` (Mollusk `MolluskComputeUnitBencher`) — не блокирует
+- [ ] (opt-in, будущее) high-security-mode: slot-проверка F1 + allowlist F5
 
-### Фаза 5 — Клиент и скрипты
-- [ ] Codama-генерация типизированного клиента из IDL
-- [ ] Скрипт `@solana/kit`: create → propose → approve → execute
-- [ ] Демонстрация: при M-1 подписях `execute` падает
+### Фаза 5 — Клиент и скрипты — ✅ закрыта 2026-07-13
+- [x] Codama-генерация типизированного клиента из IDL (`scripts/generate-client.mjs`, `yarn generate:client` → `clients/js/`; стек: codama 1.9 + nodes-from-anchor + renderers-js на `@solana/kit` 7)
+- [x] Скрипт `@solana/kit`: create → propose → approve → execute (`scripts/demo.ts`, `yarn demo`); обёртка `scripts/run-demo.sh` поднимает `solana-test-validator` с задеплоенной программой (`yarn demo:local`)
+- [x] Демонстрация: при M-1 подписях `execute` падает с `NotEnoughSigners` (6005) — сценарий 2 в `demo.ts`, проверено на локальном валидаторе
+- [ ] (перенос в Фазу 7) на devnet: тот же `demo.ts` со сменой `RPC_URL`/`WS_URL`
 
 ### Фаза 6 — Фронтенд (Next.js, devnet)
 - [ ] Подключение кошелька (Wallet Standard / Phantom) через framework-kit (`@solana/client` + `@solana/react-hooks`)

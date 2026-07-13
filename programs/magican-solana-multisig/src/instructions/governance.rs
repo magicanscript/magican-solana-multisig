@@ -50,5 +50,16 @@ pub fn change_threshold(ctx: Context<Auth>, threshold: u8) -> Result<()> {
         ErrorCode::InvalidThreshold
     );
     multisig.threshold = threshold;
+
+    // F2 (аудит): смена порога — тоже изменение правил кворума. `execute` читает
+    // `threshold` в момент исполнения, поэтому ПОНИЖЕНИЕ порога сделало бы старое
+    // недобравшее предложение внезапно исполнимым без переодобрения под новым правилом.
+    // Бампаем `owner_set_seqno` (используем его как общую версию конфигурации), чтобы
+    // инвалидировать все pending-предложения и потребовать свежих голосов (#5).
+    multisig.owner_set_seqno = multisig
+        .owner_set_seqno
+        .checked_add(1)
+        .ok_or(ProgramError::ArithmeticOverflow)?;
+
     Ok(())
 }
