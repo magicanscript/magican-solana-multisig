@@ -6,8 +6,9 @@ use crate::error::ErrorCode;
 /// PDA-кошелёк с мультиподписью.
 ///
 /// seeds = [MULTISIG_SEED, creator.key(), seed.to_le_bytes()] — уникальность на создателя.
-/// Сам аккаунт выступает «владельцем» средств и подписывает вложенные инструкции
-/// через `invoke_signed`. `creator` и `seed` хранятся, чтобы реконструировать сиды подписи.
+/// Это аккаунт ПРАВИЛ (владельцы, порог, счётчики). Средства держит и подписывает вложенные
+/// инструкции отдельная treasury-PDA `multisig_signer` (см. `signer_bump`).
+/// `creator` и `seed` хранятся, чтобы реконструировать сиды подписи.
 #[account]
 #[derive(InitSpace)]
 pub struct Multisig {
