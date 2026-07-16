@@ -45,7 +45,7 @@
 | Фронтенд | Next.js **16** (App Router, Turbopack) + `@solana/client` + `@solana/react-hooks` (framework-kit), Wallet Standard (Phantom) |
 | Тесты программы | **LiteSVM, Rust** (`cargo test`) — быстрый гейт, 21 тест |
 | Тесты фронта | **Vitest** (+ @testing-library/react для компонентов) |
-| Кластер | разработка против **локального валидатора**, деплой на **devnet** в конце |
+| Кластер | разработка сразу против **devnet** (план Б); программа задеплоена — см. «Статус деплоя» ниже |
 | CI | GitHub Actions (`anchor build` + `cargo test`; фронт: `build` + `vitest` + `tsc`) |
 | Лицензия | MIT |
 
@@ -57,6 +57,24 @@
 > отдельный kit-RPC (`createSolanaRpc`) — чтение (`getProgramAccounts` + `memcmp`).
 
 > Все CLI-команды агент/скрипт запускает с префиксом `NO_DNA=1`.
+
+### Статус деплоя (devnet)
+
+Программа задеплоена **2026-07-16** на публичный devnet:
+
+| Параметр | Значение |
+|---|---|
+| Program ID | `EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG` |
+| Кластер | devnet (`https://api.devnet.solana.com`) |
+| Loader | BPF Upgradeable (обновляемая) |
+| Upgrade authority | `8wpBxSGcudaQWGB47SMhkFVb1XmHXqhDXsfyjVJj5TCY` |
+| Deploy signature | `89iuZuBtNMVK11QPom8Dggfc5uuqXLHxQcwEKDaJfVgLfCozzX9Lh9zui2vrXHaZpmDSM77y1pGfrcQyqWfiwxP` |
+| Data length | 209 440 байт |
+| Explorer | `https://explorer.solana.com/address/EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG?cluster=devnet` |
+
+Первая попытка `anchor deploy` упала на `Max retries exceeded` (перегрузка публичного RPC при
+заливке буфера); деплой возобновлён из существующего буфера (`solana program deploy --buffer …
+--max-sign-attempts 200`) без повторной аренды.
 
 ---
 

@@ -8,6 +8,9 @@ skip-lint = false
 [programs.localnet]
 magican_solana_multisig = "EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG"
 
+[programs.devnet]
+magican_solana_multisig = "EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG"
+
 [provider]
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
