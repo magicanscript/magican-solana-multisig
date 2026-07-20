@@ -6,10 +6,10 @@ use crate::state::{Multisig, Transaction, TransactionAccount};
 
 #[derive(Accounts)]
 pub struct CreateTransaction<'info> {
-    /// mut — инкрементируем `transaction_count` (счётчик деривации PDA транзакций).
+    /// mut — we increment `transaction_count` (the transaction PDA derivation counter).
     #[account(mut)]
     pub multisig: Account<'info, Multisig>,
-    /// Новое предложение. PDA привязан к текущему `transaction_count` мультисига.
+    /// The new proposal. Its PDA is bound to the multisig's current `transaction_count`.
     #[account(
         init,
         payer = proposer,
@@ -31,7 +31,7 @@ pub fn handler(
 ) -> Result<()> {
     let multisig = &mut ctx.accounts.multisig;
 
-    // Только владелец может предлагать (#1). Индекс нужен для автоголоса.
+    // Only an owner may propose (#1). The index is needed for the auto-vote.
     let proposer_index = multisig
         .owners
         .iter()
@@ -44,7 +44,7 @@ pub fn handler(
     );
     require!(data.len() <= MAX_TX_DATA, ErrorCode::DataTooLarge);
 
-    // Маска голосов длиной = число владельцев; proposer голосует автоматически.
+    // Vote mask with length = number of owners; the proposer votes automatically.
     let mut signers = vec![false; multisig.owners.len()];
     signers[proposer_index] = true;
 
@@ -56,7 +56,7 @@ pub fn handler(
     transaction.data = data;
     transaction.signers = signers;
     transaction.did_execute = false;
-    // Снапшот версии владельцев — инвалидирует предложение при будущей смене владельцев (#5).
+    // Owner-set version snapshot — invalidates the proposal on a future owner change (#5).
     transaction.owner_set_seqno = multisig.owner_set_seqno;
 
     multisig.transaction_count = multisig

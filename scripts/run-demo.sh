@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Поднимает локальный solana-test-validator с задеплоенной программой,
-# ждёт готовности RPC, запускает scripts/demo.ts и убирает за собой.
+# Brings up a local solana-test-validator with the program deployed,
+# waits for the RPC to be ready, runs scripts/demo.ts and cleans up after itself.
 #
-# Требует предварительной сборки: NO_DNA=1 anchor build
+# Requires a prior build: NO_DNA=1 anchor build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,11 +14,11 @@ LEDGER="$(mktemp -d)"
 RPC="http://127.0.0.1:8899"
 
 if [ ! -f "$SO" ]; then
-  echo "Нет $SO — сначала выполни: NO_DNA=1 anchor build" >&2
+  echo "No $SO — run this first: NO_DNA=1 anchor build" >&2
   exit 1
 fi
 
-echo "Запускаю solana-test-validator (ledger: $LEDGER)…"
+echo "Starting solana-test-validator (ledger: $LEDGER)…"
 NO_DNA=1 solana-test-validator \
   --reset \
   --ledger "$LEDGER" \
@@ -27,14 +27,14 @@ NO_DNA=1 solana-test-validator \
 VALIDATOR_PID=$!
 
 cleanup() {
-  echo "Останавливаю валидатор…"
+  echo "Stopping the validator…"
   kill "$VALIDATOR_PID" 2>/dev/null || true
   wait "$VALIDATOR_PID" 2>/dev/null || true
   rm -rf "$LEDGER"
 }
 trap cleanup EXIT
 
-echo "Жду готовности RPC…"
+echo "Waiting for the RPC to be ready…"
 READY=0
 for _ in $(seq 1 60); do
   if NO_DNA=1 solana --url "$RPC" cluster-version >/dev/null 2>&1; then
@@ -44,9 +44,9 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [ "$READY" -ne 1 ]; then
-  echo "RPC так и не поднялся за 60 c." >&2
+  echo "The RPC never came up within 60 s." >&2
   exit 1
 fi
-echo "RPC готов. Запускаю демо."
+echo "RPC is ready. Starting the demo."
 
 yarn tsx scripts/demo.ts

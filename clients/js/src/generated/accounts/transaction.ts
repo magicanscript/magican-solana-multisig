@@ -59,40 +59,40 @@ export function getTransactionDiscriminatorBytes(): ReadonlyUint8Array {
 
 export type Transaction = {
   discriminator: ReadonlyUint8Array;
-  /** К какому мультисигу относится. */
+  /** Which multisig it belongs to. */
   multisig: Address;
-  /** Кто предложил. */
+  /** Who proposed it. */
   proposer: Address;
-  /** Целевая программа вложенной инструкции. */
+  /** Target program of the inner instruction. */
   programId: Address;
-  /** Метаданные аккаунтов вложенной инструкции. */
+  /** Account metadata of the inner instruction. */
   accounts: Array<TransactionAccount>;
-  /** Сериализованные данные вложенной инструкции. */
+  /** Serialized data of the inner instruction. */
   data: ReadonlyUint8Array;
-  /** Маска одобрений, длиной = owners.len() на момент создания. */
+  /** Approval mask, with length = owners.len() at creation time. */
   signers: Array<boolean>;
-  /** Защита от повторного исполнения (replay). */
+  /** Guard against repeated execution (replay). */
   didExecute: boolean;
-  /** Снапшот версии владельцев на момент создания. */
+  /** Snapshot of the owner-set version at creation time. */
   ownerSetSeqno: number;
 };
 
 export type TransactionArgs = {
-  /** К какому мультисигу относится. */
+  /** Which multisig it belongs to. */
   multisig: Address;
-  /** Кто предложил. */
+  /** Who proposed it. */
   proposer: Address;
-  /** Целевая программа вложенной инструкции. */
+  /** Target program of the inner instruction. */
   programId: Address;
-  /** Метаданные аккаунтов вложенной инструкции. */
+  /** Account metadata of the inner instruction. */
   accounts: Array<TransactionAccountArgs>;
-  /** Сериализованные данные вложенной инструкции. */
+  /** Serialized data of the inner instruction. */
   data: ReadonlyUint8Array;
-  /** Маска одобрений, длиной = owners.len() на момент создания. */
+  /** Approval mask, with length = owners.len() at creation time. */
   signers: Array<boolean>;
-  /** Защита от повторного исполнения (replay). */
+  /** Guard against repeated execution (replay). */
   didExecute: boolean;
-  /** Снапшот версии владельцев на момент создания. */
+  /** Snapshot of the owner-set version at creation time. */
   ownerSetSeqno: number;
 };
 

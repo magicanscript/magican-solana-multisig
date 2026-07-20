@@ -1,5 +1,5 @@
-// Glob-реэкспорт нужен, чтобы `#[program]` в lib.rs видел сгенерированные Anchor
-// клиентские модули (`__client_accounts_*`), а не только сами Accounts-структуры.
+// The glob re-export is needed so that `#[program]` in lib.rs sees the Anchor-generated
+// client modules (`__client_accounts_*`), not just the Accounts structs themselves.
 #![allow(ambiguous_glob_reexports)]
 
 pub mod approve;

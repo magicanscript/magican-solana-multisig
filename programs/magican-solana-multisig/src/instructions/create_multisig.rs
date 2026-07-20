@@ -6,8 +6,8 @@ use crate::state::{assert_valid_owners_and_threshold, Multisig};
 #[derive(Accounts)]
 #[instruction(owners: Vec<Pubkey>, threshold: u8, seed: u64)]
 pub struct CreateMultisig<'info> {
-    /// PDA-кошелёк. `init` (не `init_if_needed`) закрывает reinit-атаку (#7).
-    /// Канонический bump сохраняем в state для последующего `invoke_signed` (#8).
+    /// The PDA wallet. `init` (not `init_if_needed`) closes the reinit attack (#7).
+    /// The canonical bump is persisted in state for the later `invoke_signed` (#8).
     #[account(
         init,
         payer = creator,
@@ -29,7 +29,7 @@ pub fn handler(
 ) -> Result<()> {
     assert_valid_owners_and_threshold(&owners, threshold)?;
 
-    // Канонический bump treasury/authority PDA (seeds = [multisig.key()]).
+    // Canonical bump of the treasury/authority PDA (seeds = [multisig.key()]).
     let (_signer, signer_bump) =
         Pubkey::find_program_address(&[ctx.accounts.multisig.key().as_ref()], ctx.program_id);
 

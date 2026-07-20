@@ -140,9 +140,9 @@ export type CreateTransactionInput<
   TAccountProposer extends string = string,
   TAccountSystemProgram extends string = string,
 > = {
-  /** mut — инкрементируем `transaction_count` (счётчик деривации PDA транзакций). */
+  /** mut — we increment `transaction_count` (the transaction PDA derivation counter). */
   multisig: Address<TAccountMultisig>;
-  /** Новое предложение. PDA привязан к текущему `transaction_count` мультисига. */
+  /** The new proposal. Its PDA is bound to the multisig's current `transaction_count`. */
   transaction: Address<TAccountTransaction>;
   proposer: TransactionSigner<TAccountProposer>;
   systemProgram?: Address<TAccountSystemProgram>;
@@ -225,9 +225,9 @@ export type ParsedCreateTransactionInstruction<
 > = {
   programAddress: Address<TProgram>;
   accounts: {
-    /** mut — инкрементируем `transaction_count` (счётчик деривации PDA транзакций). */
+    /** mut — we increment `transaction_count` (the transaction PDA derivation counter). */
     multisig: TAccountMetas[0];
-    /** Новое предложение. PDA привязан к текущему `transaction_count` мультисига. */
+    /** The new proposal. Its PDA is bound to the multisig's current `transaction_count`. */
     transaction: TAccountMetas[1];
     proposer: TAccountMetas[2];
     systemProgram: TAccountMetas[3];

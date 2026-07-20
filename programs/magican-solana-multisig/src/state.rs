@@ -3,64 +3,65 @@ use anchor_lang::prelude::*;
 use crate::constants::{MAX_OWNERS, MAX_TX_ACCOUNTS, MAX_TX_DATA};
 use crate::error::ErrorCode;
 
-/// PDA-кошелёк с мультиподписью.
+/// A PDA wallet guarded by multiple signatures.
 ///
-/// seeds = [MULTISIG_SEED, creator.key(), seed.to_le_bytes()] — уникальность на создателя.
-/// Сам аккаунт выступает «владельцем» средств и подписывает вложенные инструкции
-/// через `invoke_signed`. `creator` и `seed` хранятся, чтобы реконструировать сиды подписи.
+/// seeds = [MULTISIG_SEED, creator.key(), seed.to_le_bytes()] — uniqueness per creator.
+/// This is the RULES account (owners, threshold, counters). Funds are held, and inner
+/// instructions signed, by a separate treasury PDA `multisig_signer` (see `signer_bump`).
+/// `creator` and `seed` are stored so the signing seeds can be reconstructed.
 #[account]
 #[derive(InitSpace)]
 pub struct Multisig {
-    /// Создатель — часть сидов PDA (нужен для `invoke_signed`).
+    /// Creator — part of the PDA seeds (needed for `invoke_signed`).
     pub creator: Pubkey,
-    /// Пользовательский сид — часть сидов PDA (позволяет одному создателю иметь много мультисигов).
+    /// User-supplied seed — part of the PDA seeds (lets one creator own many multisigs).
     pub seed: u64,
-    /// Список владельцев (N).
+    /// The list of owners (N).
     #[max_len(MAX_OWNERS)]
     pub owners: Vec<Pubkey>,
-    /// Сколько подписей нужно для исполнения (M).
+    /// How many signatures execution requires (M).
     pub threshold: u8,
-    /// Версия набора владельцев — инвалидирует старые предложения при смене владельцев.
+    /// Owner-set version — invalidates old proposals when the owners change.
     pub owner_set_seqno: u32,
-    /// Счётчик для деривации PDA транзакций.
+    /// Counter used to derive transaction PDAs.
     pub transaction_count: u64,
-    /// Канонический bump самого PDA данных `Multisig`.
+    /// Canonical bump of the `Multisig` data PDA itself.
     pub bump: u8,
-    /// Канонический bump treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
-    /// Это System-owned PDA-казна: держит средства и подписывает вложенные инструкции
-    /// через `invoke_signed`. Отделён от аккаунта данных, т.к. `SystemProgram.transfer`
-    /// требует System-владения source-аккаунта.
+    /// Canonical bump of the treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
+    /// This is a System-owned PDA treasury: it holds the funds and signs inner instructions
+    /// via `invoke_signed`. It is split off from the data account because `SystemProgram.transfer`
+    /// requires the source account to be System-owned.
     pub signer_bump: u8,
 }
 
-/// Предложение (одна вложенная инструкция), проходящее процедуру голосования.
+/// A proposal (a single inner instruction) going through the voting procedure.
 ///
 /// seeds = [TRANSACTION_SEED, multisig.key(), transaction_index.to_le_bytes()].
 #[account]
 #[derive(InitSpace)]
 pub struct Transaction {
-    /// К какому мультисигу относится.
+    /// Which multisig it belongs to.
     pub multisig: Pubkey,
-    /// Кто предложил.
+    /// Who proposed it.
     pub proposer: Pubkey,
-    /// Целевая программа вложенной инструкции.
+    /// Target program of the inner instruction.
     pub program_id: Pubkey,
-    /// Метаданные аккаунтов вложенной инструкции.
+    /// Account metadata of the inner instruction.
     #[max_len(MAX_TX_ACCOUNTS)]
     pub accounts: Vec<TransactionAccount>,
-    /// Сериализованные данные вложенной инструкции.
+    /// Serialized data of the inner instruction.
     #[max_len(MAX_TX_DATA)]
     pub data: Vec<u8>,
-    /// Маска одобрений, длиной = owners.len() на момент создания.
+    /// Approval mask, with length = owners.len() at creation time.
     #[max_len(MAX_OWNERS)]
     pub signers: Vec<bool>,
-    /// Защита от повторного исполнения (replay).
+    /// Guard against repeated execution (replay).
     pub did_execute: bool,
-    /// Снапшот версии владельцев на момент создания.
+    /// Snapshot of the owner-set version at creation time.
     pub owner_set_seqno: u32,
 }
 
-/// Метаданные одного аккаунта вложенной инструкции.
+/// Metadata of a single account of the inner instruction.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
 pub struct TransactionAccount {
     pub pubkey: Pubkey,
@@ -68,10 +69,10 @@ pub struct TransactionAccount {
     pub is_writable: bool,
 }
 
-/// Валидация набора владельцев и порога — переиспользуется в `create_multisig`,
+/// Validation of the owner set and the threshold — reused by `create_multisig`,
 /// `set_owners`, `change_threshold`.
 ///
-/// Проверяет: непустой список, лимит N, отсутствие дубликатов, `1 <= threshold <= N`.
+/// Checks: non-empty list, the N limit, absence of duplicates, `1 <= threshold <= N`.
 pub fn assert_valid_owners_and_threshold(owners: &[Pubkey], threshold: u8) -> Result<()> {
     require!(!owners.is_empty(), ErrorCode::InvalidThreshold);
     require!(owners.len() <= MAX_OWNERS, ErrorCode::TooManyOwners);
@@ -83,7 +84,7 @@ pub fn assert_valid_owners_and_threshold(owners: &[Pubkey], threshold: u8) -> Re
     Ok(())
 }
 
-/// Проверка уникальности владельцев: дубликаты обходили бы эффективный порог (#10).
+/// Owner uniqueness check: duplicates would bypass the effective threshold (#10).
 pub fn assert_unique_owners(owners: &[Pubkey]) -> Result<()> {
     for (i, owner) in owners.iter().enumerate() {
         require!(

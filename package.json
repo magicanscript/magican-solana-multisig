@@ -1,5 +1,7 @@
 {
-  "license": "ISC",
+  "name": "magican-solana-multisig",
+  "version": "0.1.0",
+  "license": "MIT",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",

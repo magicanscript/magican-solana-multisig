@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-//! Общие хелперы для LiteSVM-тестов: загрузка программы, деривация PDA,
-//! сборка и отправка всех инструкций мультисига.
+//! Shared helpers for the LiteSVM tests: loading the program, deriving PDAs,
+//! building and sending every multisig instruction.
 
 use {
     anchor_lang::{
@@ -36,7 +36,7 @@ pub fn funded_keypair(svm: &mut LiteSVM, lamports: u64) -> Keypair {
     kp
 }
 
-// --- Деривация PDA ---
+// --- PDA derivation ---
 
 pub fn multisig_pda(program_id: &Pubkey, creator: &Pubkey, seed: u64) -> Pubkey {
     Pubkey::find_program_address(
@@ -58,7 +58,7 @@ pub fn transaction_pda(program_id: &Pubkey, multisig: &Pubkey, index: u64) -> Pu
     .0
 }
 
-// --- Отправка транзакции ---
+// --- Sending a transaction ---
 
 fn send(svm: &mut LiteSVM, ix: Instruction, payer: &Keypair, signers: &[&Keypair]) -> TxResult {
     let blockhash = svm.latest_blockhash();
@@ -67,7 +67,7 @@ fn send(svm: &mut LiteSVM, ix: Instruction, payer: &Keypair, signers: &[&Keypair
     svm.send_transaction(tx)
 }
 
-// --- Инструкции ---
+// --- Instructions ---
 
 pub fn create_multisig(
     svm: &mut LiteSVM,
@@ -81,7 +81,8 @@ pub fn create_multisig(
     create_multisig_at(svm, program_id, creator, &pda, owners, threshold, seed)
 }
 
-/// Как `create_multisig`, но с явным адресом аккаунта `multisig` — для теста подмены PDA (#8).
+/// Like `create_multisig`, but with an explicit `multisig` account address — for the PDA
+/// substitution test (#8).
 pub fn create_multisig_at(
     svm: &mut LiteSVM,
     program_id: &Pubkey,
@@ -159,8 +160,8 @@ pub fn approve(
     send(svm, ix, owner, &[owner])
 }
 
-/// `remaining` — целевые аккаунты вложенной инструкции и её программа
-/// (is_signer=false на внешнем уровне; PDA подписывает через invoke_signed внутри).
+/// `remaining` — the inner instruction's target accounts and its program
+/// (is_signer=false at the outer level; the PDA signs via invoke_signed inside).
 pub fn execute_transaction(
     svm: &mut LiteSVM,
     program_id: &Pubkey,
@@ -186,9 +187,9 @@ pub fn execute_transaction(
     send(svm, ix, executor, &[executor])
 }
 
-// --- SOL-перевод из treasury-PDA (target = SystemProgram) ---
+// --- SOL transfer out of the treasury PDA (target = SystemProgram) ---
 
-/// Раскладывает перевод SOL из treasury-PDA на (метаданные, данные, remaining).
+/// Decomposes a SOL transfer out of the treasury PDA into (metadata, data, remaining).
 pub fn sol_transfer_parts(
     signer_pda: &Pubkey,
     recipient: &Pubkey,
@@ -220,11 +221,11 @@ pub fn sol_transfer_parts(
     (ta, ix.data, remaining)
 }
 
-// --- Governance: сборка вложенной инструкции (target = сам мультисиг) ---
+// --- Governance: building the inner instruction (target = the multisig itself) ---
 
-/// Раскладывает inner-инструкцию с контекстом `Auth` (multisig + multisig_signer)
-/// на (метаданные для create_transaction, remaining-аккаунты для execute).
-/// program-получатель CPI — сам наш мультисиг.
+/// Decomposes an inner instruction with the `Auth` context (multisig + multisig_signer)
+/// into (metadata for create_transaction, remaining accounts for execute).
+/// The CPI target program is our own multisig.
 fn auth_ix_parts(
     program_id: &Pubkey,
     multisig: &Pubkey,
@@ -242,7 +243,7 @@ fn auth_ix_parts(
             is_writable: false,
         },
     ];
-    // На внешнем уровне PDA не подписывает; плюс сама программа-получатель CPI.
+    // At the outer level the PDA does not sign; plus the CPI target program itself.
     let remaining = vec![
         AccountMeta::new(*multisig, false),
         AccountMeta::new_readonly(*signer_pda, false),
@@ -276,26 +277,26 @@ pub fn change_threshold_parts(
     (ta, data, remaining)
 }
 
-// --- Проверка ошибок ---
+// --- Error checking ---
 
-/// Утверждает, что транзакция упала, а сообщение/логи содержат `needle`
-/// (имя Anchor-ошибки в логах или строка рантайм-ошибки). Печатает фактическую
-/// ошибку при несовпадении — чтобы тест не «зеленел» по неправильной причине.
+/// Asserts that the transaction failed and that the message/logs contain `needle`
+/// (the Anchor error name in the logs or the runtime error string). Prints the actual
+/// error on a mismatch — so that a test does not turn green for the wrong reason.
 pub fn assert_err_log(res: TxResult, needle: &str) {
     match res {
-        Ok(_) => panic!("ожидался провал с '{needle}', но транзакция прошла"),
+        Ok(_) => panic!("expected a failure with '{needle}', but the transaction succeeded"),
         Err(e) => {
             let logs = e.meta.logs.join("\n");
             let err = format!("{:?}", e.err);
             assert!(
                 logs.contains(needle) || err.contains(needle),
-                "ожидалась ошибка с '{needle}', получено err={err}\nлоги:\n{logs}"
+                "expected an error with '{needle}', got err={err}\nlogs:\n{logs}"
             );
         }
     }
 }
 
-// --- Чтение state ---
+// --- Reading state ---
 
 pub fn fetch_multisig(svm: &LiteSVM, pda: &Pubkey) -> Multisig {
     let acc = svm.get_account(pda).expect("multisig account exists");
