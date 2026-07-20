@@ -7,8 +7,8 @@ use magican_solana_multisig::TransactionAccount;
 use solana_keypair::Keypair;
 use solana_signer::Signer;
 
-/// Проводит governance-предложение (target = сам мультисиг) через полный цикл
-/// propose → approve → execute. Возвращает результат execute.
+/// Drives a governance proposal (target = the multisig itself) through the full
+/// propose -> approve -> execute cycle. Returns the result of execute.
 fn run_governance_proposal(
     svm: &mut litesvm::LiteSVM,
     program_id: &Pubkey,
@@ -41,15 +41,15 @@ fn test_set_owners_invalidates_pending_proposal() {
     let (signer_pda, _) = multisig_signer_pda(&program_id, &multisig);
     svm.airdrop(&signer_pda, 2_000_000_000).unwrap();
 
-    // Предложение A (index 0): перевод SOL. Набираем 2/2 одобрений, но НЕ исполняем.
+    // Proposal A (index 0): a SOL transfer. We gather 2/2 approvals but do NOT execute.
     let recipient = Pubkey::new_unique();
     let (ta_a, data_a, remaining_a) = sol_transfer_parts(&signer_pda, &recipient, 1_000_000_000);
     create_transaction(&mut svm, &program_id, &multisig, &owner1, 0, anchor_lang::solana_program::system_program::ID, ta_a, data_a).unwrap();
     let tx_a = transaction_pda(&program_id, &multisig, 0);
     approve(&mut svm, &program_id, &multisig, &tx_a, &owner2).unwrap();
-    assert_eq!(fetch_transaction(&svm, &tx_a).signers, vec![true, true, false], "A готово к исполнению");
+    assert_eq!(fetch_transaction(&svm, &tx_a).signers, vec![true, true, false], "A is ready to execute");
 
-    // Предложение B (index 1): set_owners([o1, o2]) — убираем o3. Исполняем.
+    // Proposal B (index 1): set_owners([o1, o2]) — we drop o3. Execute it.
     let new_owners = vec![owner1.pubkey(), owner2.pubkey()];
     let (ta_b, data_b, remaining_b) =
         set_owners_parts(&program_id, &multisig, &signer_pda, new_owners.clone());
@@ -57,14 +57,14 @@ fn test_set_owners_invalidates_pending_proposal() {
         .unwrap();
 
     let ms = fetch_multisig(&svm, &multisig);
-    assert_eq!(ms.owners, new_owners, "владельцы обновлены");
-    assert_eq!(ms.owner_set_seqno, 1, "seqno инкрементнулся");
-    assert_eq!(ms.threshold, 2, "порог сохранён");
+    assert_eq!(ms.owners, new_owners, "owners updated");
+    assert_eq!(ms.owner_set_seqno, 1, "seqno incremented");
+    assert_eq!(ms.threshold, 2, "threshold preserved");
 
-    // Теперь A нельзя исполнить: его owner_set_seqno=0 != 1 (#5).
+    // Now A cannot be executed: its owner_set_seqno=0 != 1 (#5).
     let stale = execute_transaction(&mut svm, &program_id, &multisig, &tx_a, &owner1, remaining_a);
-    assert!(stale.is_err(), "старое предложение инвалидировано сменой владельцев");
-    assert!(!fetch_transaction(&svm, &tx_a).did_execute, "A так и не исполнено");
+    assert!(stale.is_err(), "the old proposal is invalidated by the owner change");
+    assert!(!fetch_transaction(&svm, &tx_a).did_execute, "A was never executed");
 }
 
 #[test]
@@ -81,18 +81,18 @@ fn test_change_threshold_via_governance() {
     let multisig = multisig_pda(&program_id, &owner1.pubkey(), seed);
     let (signer_pda, _) = multisig_signer_pda(&program_id, &multisig);
 
-    // Меняем порог 2 → 3 через голосование.
+    // Change the threshold 2 -> 3 through a vote.
     let (ta, data, remaining) = change_threshold_parts(&program_id, &multisig, &signer_pda, 3);
     run_governance_proposal(&mut svm, &program_id, &multisig, &owner1, &owner2, 0, ta, data, remaining)
         .unwrap();
 
-    assert_eq!(fetch_multisig(&svm, &multisig).threshold, 3, "порог изменён на 3");
+    assert_eq!(fetch_multisig(&svm, &multisig).threshold, 3, "threshold changed to 3");
 }
 
 #[test]
 fn test_change_threshold_invalidates_pending_proposal() {
-    // F2 (аудит): понижение порога не должно делать исполнимым предложение,
-    // которое НИКОГДА не набирало прежний кворум. Инвалидируем его бампом seqno.
+    // F2 (audit): lowering the threshold must not make executable a proposal that
+    // NEVER gathered the previous quorum. We invalidate it by bumping seqno.
     let (mut svm, program_id) = setup();
 
     let owner1 = funded_keypair(&mut svm, 5_000_000_000);
@@ -101,25 +101,25 @@ fn test_change_threshold_invalidates_pending_proposal() {
     let owners = vec![owner1.pubkey(), owner2.pubkey(), owner3.pubkey()];
     let seed: u64 = 4;
 
-    // Стартовый порог 3 из 3.
+    // Initial threshold 3 of 3.
     create_multisig(&mut svm, &program_id, &owner1, &owners, 3, seed).unwrap();
     let multisig = multisig_pda(&program_id, &owner1.pubkey(), seed);
     let (signer_pda, _) = multisig_signer_pda(&program_id, &multisig);
     svm.airdrop(&signer_pda, 2_000_000_000).unwrap();
 
-    // Предложение A (index 0): перевод SOL. Набираем ТОЛЬКО 2 из 3 — кворума нет.
+    // Proposal A (index 0): a SOL transfer. We gather ONLY 2 of 3 — no quorum.
     let recipient = Pubkey::new_unique();
     let (ta_a, data_a, remaining_a) = sol_transfer_parts(&signer_pda, &recipient, 1_000_000_000);
     create_transaction(&mut svm, &program_id, &multisig, &owner1, 0, anchor_lang::solana_program::system_program::ID, ta_a, data_a).unwrap();
     let tx_a = transaction_pda(&program_id, &multisig, 0);
     approve(&mut svm, &program_id, &multisig, &tx_a, &owner2).unwrap();
-    assert_eq!(fetch_transaction(&svm, &tx_a).signers, vec![true, true, false], "A имеет лишь 2/3");
+    assert_eq!(fetch_transaction(&svm, &tx_a).signers, vec![true, true, false], "A has only 2/3");
 
-    // При пороге 3 предложение A сейчас не исполнить.
+    // With a threshold of 3, proposal A cannot be executed right now.
     let insufficient = execute_transaction(&mut svm, &program_id, &multisig, &tx_a, &owner1, remaining_a.clone());
     assert_err_log(insufficient, "NotEnoughSigners");
 
-    // Предложение B (index 1): change_threshold 3 → 2. Исполняем (нужно 3/3 согласия).
+    // Proposal B (index 1): change_threshold 3 -> 2. Execute it (3/3 consent required).
     svm.expire_blockhash();
     let (ta_b, data_b, remaining_b) = change_threshold_parts(&program_id, &multisig, &signer_pda, 2);
     create_transaction(&mut svm, &program_id, &multisig, &owner1, 1, program_id, ta_b, data_b).unwrap();
@@ -129,21 +129,21 @@ fn test_change_threshold_invalidates_pending_proposal() {
     execute_transaction(&mut svm, &program_id, &multisig, &tx_b, &owner1, remaining_b).unwrap();
 
     let ms = fetch_multisig(&svm, &multisig);
-    assert_eq!(ms.threshold, 2, "порог понижен до 2");
-    assert_eq!(ms.owner_set_seqno, 1, "смена порога инкрементнула seqno (F2)");
+    assert_eq!(ms.threshold, 2, "threshold lowered to 2");
+    assert_eq!(ms.owner_set_seqno, 1, "the threshold change incremented seqno (F2)");
 
-    // Ключевой момент: A имеет 2 одобрения и порог теперь 2 — но исполниться НЕ должно,
-    // т.к. его snapshot seqno=0 != 1. Без фикса F2 A бы «проскочило».
+    // The key point: A has 2 approvals and the threshold is now 2 — yet it must NOT execute,
+    // because its snapshot seqno=0 != 1. Without the F2 fix, A would have slipped through.
     svm.expire_blockhash();
     let stale = execute_transaction(&mut svm, &program_id, &multisig, &tx_a, &owner1, remaining_a);
     assert_err_log(stale, "InvalidOwnerSetForExecute");
-    assert!(!fetch_transaction(&svm, &tx_a).did_execute, "A так и не исполнено");
+    assert!(!fetch_transaction(&svm, &tx_a).did_execute, "A was never executed");
 }
 
 #[test]
 fn test_direct_set_owners_call_fails() {
-    // set_owners нельзя вызвать напрямую (#6): за multisig_signer (Signer-PDA) невозможно
-    // подписать без self-CPI из execute_transaction.
+    // set_owners cannot be called directly (#6): there is no way to sign for multisig_signer
+    // (a Signer PDA) without the self-CPI from execute_transaction.
     use anchor_lang::solana_program::instruction::Instruction;
     use anchor_lang::{InstructionData, ToAccountMetas};
     use solana_message::{Message, VersionedMessage};
@@ -175,12 +175,12 @@ fn test_direct_set_owners_call_fails() {
 
     let blockhash = svm.latest_blockhash();
     let msg = Message::new_with_blockhash(&[ix], Some(&owner1.pubkey()), &blockhash);
-    // multisig_signer помечен как обязательный подписант, но его keypair недоступен —
-    // сборка транзакции падает (нет подписи PDA).
+    // multisig_signer is marked as a required signer, but its keypair is unavailable —
+    // building the transaction fails (there is no PDA signature).
     let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[&owner1]);
     let failed = match tx {
         Err(_) => true,
         Ok(tx) => svm.send_transaction(tx).is_err(),
     };
-    assert!(failed, "прямой вызов set_owners должен падать");
+    assert!(failed, "a direct set_owners call must fail");
 }

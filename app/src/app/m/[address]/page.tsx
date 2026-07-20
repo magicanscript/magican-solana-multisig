@@ -34,20 +34,22 @@ export default function MultisigPage() {
   const { data, signerPda, loading, error, refresh } = useMultisig(address);
   const proposals = useProposals(address);
 
-  // Казна — только реактивно. Разовое чтение после пополнения показывало старую
-  // сумму: публичный RPC — балансировщик, и нода, отвечающая на getBalance, может
-  // отставать от той, что подтвердила перевод. `watch` держит WS-подписку на
-  // аккаунт казны, поэтому новая сумма приезжает сама, без «обновите страницу».
+  // The treasury is read reactively only. A one-shot read after funding showed the
+  // old amount: a public RPC is a load balancer, and the node answering getBalance
+  // may lag behind the one that confirmed the transfer. `watch` keeps a WebSocket
+  // subscription on the treasury account, so the new amount arrives on its own,
+  // without a "refresh the page".
   const treasury = useBalance(signerPda ?? undefined, {
     watch: true,
     commitment: READ_COMMITMENT,
   });
   const treasuryLamports = treasury.lamports ?? 0n;
 
-  // У Transaction нет поля индекса — он живёт только в сидах PDA. Восстанавливаем
-  // соответствие адрес→индекс, деривируя PDA для 0..transactionCount. Карту храним
-  // вместе с ключом (адрес + счётчик), для которого она построена: чужую не отдаём,
-  // и синхронный сброс в эффекте не нужен.
+  // A Transaction has no index field — the index lives only in the PDA seeds. We
+  // rebuild the address→index mapping by deriving the PDA for 0..transactionCount.
+  // The map is stored together with the key (address + counter) it was built for:
+  // we never hand out a map belonging to another one, and no synchronous reset in
+  // the effect is needed.
   const count = data ? Number(data.transactionCount) : 0;
   const mapKey = `${address}:${count}`;
   const [indexEntry, setIndexEntry] = useState<{ key: string; map: Map<string, number> }>({
@@ -58,7 +60,7 @@ export default function MultisigPage() {
     if (!count) return;
     let cancelled = false;
     void (async () => {
-      // Деривация локальная (SHA-256 в цикле по bump), RPC здесь не участвует.
+      // Derivation is local (SHA-256 in a loop over the bump), no RPC involved.
       const entries = await Promise.all(
         Array.from(
           { length: count },
@@ -81,13 +83,14 @@ export default function MultisigPage() {
     setFundError(null);
     if (!signerPda) return;
     try {
-      // bigint трактуется как лампорты (1 SOL = 1e9).
+      // A bigint is interpreted as lamports (1 SOL = 1e9).
       const lamports = solToLamports(fundAmount);
       if (lamports <= 0n) {
-        setFundError('Введите сумму больше 0');
+        setFundError('Enter an amount greater than 0');
         return;
       }
-      // Обновлять казну руками не нужно: она на WS-подписке (useBalance выше).
+      // No manual treasury refresh needed: it is on a WebSocket subscription
+      // (useBalance above).
       await solTransfer.send(
         { amount: lamports, destination: signerPda },
         { commitment: READ_COMMITMENT },
@@ -97,16 +100,18 @@ export default function MultisigPage() {
     }
   }
 
-  // Действия над предложениями (approve/execute) идут через один диалог: собрали
-  // инструкцию → сухой прогон → подпись. Signer-инстанс фиксируем в pending, чтобы
-  // simulate и send видели ровно один и тот же (иначе kit падает на двух инстансах).
+  // Proposal actions (approve/execute) go through a single dialog: build the
+  // instruction → dry run → sign. The signer instance is pinned in `pending` so that
+  // simulate and send see exactly the same one (otherwise kit fails on two
+  // instances).
   const submit = useSubmitTx();
   const [pending, setPending] = useState<{
     title: string;
     ix: Instruction;
     signer: TransactionSigner;
-    // Признак, что результат действия уже виден в списке. Без него отставшая нода
-    // отдаёт прежнюю маску, и одобрение выглядит потерянным (см. lib/rpc-lag).
+    // A predicate telling that the action's result is already visible in the list.
+    // Without it a lagging node returns the previous mask and the approval looks
+    // lost (see lib/rpc-lag).
     done: (items: ProposalView[]) => boolean;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -133,9 +138,9 @@ export default function MultisigPage() {
 
   const onApprove = (view: ProposalView) =>
     void startAction(
-      'Одобрить предложение',
+      'Approve proposal',
       async (owner) => getApproveInstruction({ multisig: address, transaction: view.address, owner }),
-      // Голос — булева маска: ждём, пока одобрений станет больше, чем было.
+      // A vote is a boolean mask: wait until there are more approvals than before.
       (items) => {
         const next = find(items, view);
         return next != null && countApprovals(next.data.signers) > countApprovals(view.data.signers);
@@ -144,14 +149,14 @@ export default function MultisigPage() {
 
   const onExecute = (view: ProposalView) =>
     void startAction(
-      'Исполнить предложение',
+      'Execute proposal',
       async () => {
         const execIx = await getExecuteTransactionInstructionAsync({
           multisig: address,
           transaction: view.address,
         });
-        // remaining восстанавливаем из того, что предложение хранит on-chain, —
-        // независимо от того, кто и чем его создал (SOL или raw).
+        // The remaining accounts are rebuilt from what the proposal stores on-chain,
+        // regardless of who created it and how (SOL or raw).
         return appendRemaining(
           execIx,
           remainingFromProposal({ programId: view.data.programId, accounts: view.data.accounts }),
@@ -166,14 +171,15 @@ export default function MultisigPage() {
     try {
       await submit.run([pending.ix], pending.signer);
     } catch {
-      // Ошибку показывает диалог (sendError) — не закрываем.
+      // The dialog shows the error (sendError) — keep it open.
       return;
     }
     setPending(null);
     submit.reset();
-    // Обновление — ВНЕ try отправки: его ошибка попала бы в catch, где диалог уже
-    // закрыт, а sendError стёрт, и пропала бы молча. Свои ошибки refresh кладёт в
-    // proposals.error, и список показывает их вместе с кнопкой «Повторить».
+    // The refresh is OUTSIDE the send try: its error would land in the catch, where
+    // the dialog is already closed and sendError wiped, and would vanish silently.
+    // refresh puts its own errors into proposals.error, and the list shows them
+    // together with the "Retry" button.
     await proposals.refresh(done);
   }
 
@@ -198,7 +204,7 @@ export default function MultisigPage() {
           href="/"
           className="text-sm text-zinc-500 transition-colors hover:text-indigo-600 dark:text-zinc-400"
         >
-          ← К дашборду
+          ← Back to dashboard
         </Link>
 
         {loading && !data ? (
@@ -207,18 +213,18 @@ export default function MultisigPage() {
           <p className="mt-6 text-sm text-red-600 dark:text-red-400">{humanizeError(error)}</p>
         ) : !msView ? (
           <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-dashed border-zinc-300 py-16 text-center dark:border-zinc-700">
-            <p className="text-zinc-500 dark:text-zinc-400">Мультисиг не найден по этому адресу.</p>
+            <p className="text-zinc-500 dark:text-zinc-400">No multisig found at this address.</p>
             <button
               type="button"
               onClick={() => void refresh()}
               className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
-              Обновить
+              Refresh
             </button>
           </div>
         ) : (
           <>
-            {/* Шапка */}
+            {/* Header */}
             <section className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h1 className="font-mono text-lg font-semibold text-black dark:text-white">
@@ -231,7 +237,7 @@ export default function MultisigPage() {
 
               <div className="mt-4">
                 <p className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                  Владельцы
+                  Owners
                 </p>
                 <ul className="flex flex-col gap-1">
                   {(msView.data.owners as Address[]).map((owner) => (
@@ -241,7 +247,7 @@ export default function MultisigPage() {
                       </span>
                       {me && owner === me && (
                         <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                          вы
+                          you
                         </span>
                       )}
                     </li>
@@ -254,7 +260,7 @@ export default function MultisigPage() {
             <section className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Казна</p>
+                  <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Treasury</p>
                   <p className="text-2xl font-bold text-black dark:text-white">
                     {lamportsToSol(treasuryLamports)} SOL
                   </p>
@@ -266,15 +272,15 @@ export default function MultisigPage() {
                 </div>
                 <div className="flex items-end gap-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs text-zinc-500">Пополнить (SOL)</label>
+                    <label className="text-xs text-zinc-500">Fund (SOL)</label>
                     <input
                       value={fundAmount}
                       onChange={(e) => {
                         const v = e.target.value.trim();
                         if (v === '' || /^\d*\.?\d*$/.test(v)) setFundAmount(v);
                       }}
-                      // Правка суммы во время отправки меняла бы поле, которое к уже
-                      // подписанному переводу отношения не имеет, — вводит в заблуждение.
+                      // Editing the amount while sending would change a field that has
+                      // nothing to do with the already signed transfer — misleading.
                       disabled={solTransfer.isSending}
                       spellCheck={false}
                       className="w-28 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-indigo-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
@@ -284,20 +290,20 @@ export default function MultisigPage() {
                     type="button"
                     onClick={onFund}
                     disabled={!me || solTransfer.isSending}
-                    title={me ? undefined : 'Подключите кошелёк'}
+                    title={me ? undefined : 'Connect your wallet'}
                     className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {solTransfer.isSending ? 'Отправка…' : 'Пополнить'}
+                    {solTransfer.isSending ? 'Sending…' : 'Fund'}
                   </button>
                 </div>
               </div>
               {fundError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{fundError}</p>}
             </section>
 
-            {/* Предложения */}
+            {/* Proposals */}
             <section className="mt-6">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-black dark:text-white">Предложения</h2>
+                <h2 className="text-lg font-semibold text-black dark:text-white">Proposals</h2>
               </div>
 
               {wallet && signerPda && (
@@ -308,8 +314,8 @@ export default function MultisigPage() {
                     treasuryLamports={treasuryLamports}
                     session={wallet}
                     onCreated={async () => {
-                      // Счётчик мультисига нужен не меньше списка: индекс строки
-                      // (#0, #1…) восстанавливается деривацией PDA по счётчику.
+                      // The multisig counter matters as much as the list: the row
+                      // index (#0, #1…) is rebuilt by deriving PDAs from the counter.
                       const want = proposals.data.length + 1;
                       await Promise.all([
                         refresh((m) => Number(m.transactionCount) >= want),
@@ -327,8 +333,9 @@ export default function MultisigPage() {
               {proposals.loading ? (
                 <div className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
               ) : proposals.error ? (
-                // «Предложений нет» и «список не загрузился» — разные вещи: молча
-                // выдав первое за второе, мы скрыли бы предложение, ждущее подписи.
+                // "No proposals" and "the list failed to load" are different things:
+                // silently passing the latter off as the former would hide a proposal
+                // that is waiting for a signature.
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-red-300 py-12 text-center dark:border-red-900">
                   <p className="text-sm text-red-600 dark:text-red-400">
                     {humanizeError(proposals.error)}
@@ -338,12 +345,12 @@ export default function MultisigPage() {
                     onClick={() => void proposals.refresh()}
                     className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
-                    Повторить
+                    Retry
                   </button>
                 </div>
               ) : proposals.data.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-300 py-12 text-center text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                  Пока нет предложений.
+                  No proposals yet.
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
@@ -355,9 +362,9 @@ export default function MultisigPage() {
                       index={indexMap.get(view.address.toString())}
                       me={me}
                       signerPda={signerPda ?? undefined}
-                      // Пока идёт одно действие, второе начинать нельзя: startAction
-                      // перетирает pending и сбрасывает сухой прогон — подписалось бы
-                      // не то, что показано в диалоге.
+                      // While one action is in flight a second must not start:
+                      // startAction overwrites pending and resets the dry run — what
+                      // gets signed would not be what the dialog shows.
                       busy={pending != null || submit.sending}
                       onApprove={onApprove}
                       onExecute={onExecute}

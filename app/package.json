@@ -1,5 +1,5 @@
 {
-  "name": "app",
+  "name": "magican-multisig-app",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -35,5 +35,6 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
-  }
+  },
+  "license": "MIT"
 }

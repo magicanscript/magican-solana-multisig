@@ -9,46 +9,46 @@ import { MAX_TX_ACCOUNTS, MAX_TX_DATA } from "./limits";
 
 export const SYSTEM_PROGRAM = address("11111111111111111111111111111111");
 
-/** Метаданные аккаунта в том виде, в каком их хранит on-chain `Transaction`. */
+/** Account metadata exactly in the shape the on-chain `Transaction` stores it. */
 export type ProposalAccount = { pubkey: Address; isSigner: boolean; isWritable: boolean };
-/** Аккаунт для `remaining_accounts` при execute. */
+/** An account for `remaining_accounts` on execute. */
 export type Remaining = { address: Address; role: AccountRole };
 
 /**
- * Rent-exempt минимум для System-аккаунта без данных.
+ * The rent-exempt minimum for a System account with no data.
  *
- * Сверено с `getMinimumBalanceForRentExemption(0)` на devnet. Значение зафиксировано
- * намеренно (клиентская проверка должна работать без лишнего RPC), но однажды оно
- * поедет: минимум снижают и делают динамическим (SIMD-0437/0194) — тогда брать с RPC.
+ * Checked against `getMinimumBalanceForRentExemption(0)` on devnet. The value is hardcoded
+ * on purpose (the client-side check must work without an extra RPC call), but one day it
+ * will move: the minimum is being lowered and made dynamic (SIMD-0437/0194) — take it from RPC then.
  */
 export const RENT_EXEMPT_MIN_LAMPORTS = 890_880n;
 
-/** Почему сумма перевода не пройдёт: правила ренты проверены зондом на devnet. */
+/** Why the transfer amount won't go through: the rent rules were verified by a probe on devnet. */
 export type AmountIssue =
   | { kind: "remainder"; safeMax: bigint }
   | { kind: "recipient"; needed: bigint };
 
 /**
- * Максимум к выводу — весь баланс: рантайм разрешает опустошить казну в ноль
- * (аккаунт просто удаляется). Оставлять минимум незачем — это заперло бы SOL.
+ * The maximum to withdraw is the whole balance: the runtime allows draining the treasury to
+ * zero (the account is simply deleted). Keeping a minimum around is pointless — it would lock up SOL.
  */
 export const maxTransferLamports = (treasuryLamports: bigint): bigint => treasuryLamports;
 
 /**
- * Казна после перевода обязана остаться либо РОВНО в нуле, либо не ниже минимума:
- * промежуточный остаток рантайм отвергает (InsufficientFundsForRent), и упадёт это
- * на execute — когда подписи уже собраны, а отменить предложение нечем.
+ * After the transfer the treasury must be left either EXACTLY at zero or no lower than the
+ * minimum: the runtime rejects an in-between remainder (InsufficientFundsForRent), and that
+ * fails on execute — when the approvals are already collected and there is no way to cancel.
  */
 export function checkTreasuryRemainder(treasuryLamports: bigint, amount: bigint): AmountIssue | null {
-  if (amount >= treasuryLamports) return null; // полный вывод — можно; нехватка — не про ренту
+  if (amount >= treasuryLamports) return null; // full withdrawal is fine; a shortfall isn't about rent
   const rest = treasuryLamports - amount;
   if (rest >= RENT_EXEMPT_MIN_LAMPORTS) return null;
   return { kind: "remainder", safeMax: treasuryLamports - RENT_EXEMPT_MIN_LAMPORTS };
 }
 
 /**
- * Получателю после перевода обязано хватить на rent-exempt: перевод пыли на пустой
- * адрес рантайм отвергает. Тот же капкан, что и с остатком казны, — только на execute.
+ * After the transfer the recipient must have enough to be rent-exempt: the runtime rejects a
+ * dust transfer to an empty address. The same trap as with the treasury remainder — only on execute.
  */
 export function checkRecipientRent(recipientLamports: bigint, amount: bigint): AmountIssue | null {
   if (recipientLamports + amount >= RENT_EXEMPT_MIN_LAMPORTS) return null;
@@ -56,11 +56,11 @@ export function checkRecipientRent(recipientLamports: bigint, amount: bigint): A
 }
 
 /**
- * `remaining_accounts` для execute — из того, что предложение реально хранит on-chain
- * (одинаково для SOL- и raw-предложений; форма создания тут ни при чём).
+ * `remaining_accounts` for execute — built from what the proposal actually stores on-chain
+ * (the same for SOL and raw proposals; the creation form has nothing to do with it).
  *
- * Роли не поднимаем выше нужного: подпись за treasury-PDA программа ставит сама
- * через `invoke_signed`, на внешнем уровне signer-привилегия не требуется (#11).
+ * We don't raise roles higher than needed: the program signs for the treasury PDA itself
+ * via `invoke_signed`, at the outer level the signer privilege is not required (#11).
  */
 export const remainingFromProposal = (proposal: {
   programId: Address;
@@ -83,8 +83,8 @@ export function buildSolTransfer(signerPda: Address, recipient: Address, amount:
     { pubkey: signerPda, isSigner: true, isWritable: true },
     { pubkey: recipient, isSigner: false, isWritable: true },
   ];
-  // Роли в remaining не поднимаем выше нужного: подпись за PDA даёт invoke_signed,
-  // здесь signer-привилегия не требуется и не запрашивается.
+  // We don't raise the roles in remaining higher than needed: invoke_signed provides the
+  // signature for the PDA, here the signer privilege is neither required nor requested.
   const remaining: Remaining[] = [
     { address: signerPda, role: AccountRole.WRITABLE },
     { address: recipient, role: AccountRole.WRITABLE },
@@ -94,33 +94,33 @@ export function buildSolTransfer(signerPda: Address, recipient: Address, amount:
 }
 
 /**
- * Данные вложенной инструкции: base64 → байты.
+ * The nested instruction's data: base64 → bytes.
  *
- * Пробелы и переносы вырезаем — скопированный из обозревателя блоб приходит с
- * ними, а декодер kit на них падает. А вот длину проверяем сами: на строке
- * длиной %4==1 декодер молча роняет хвостовой символ («SGVsbG8hA» даёт те же
- * байты, что «SGVsbG8h»). Обрезанный при копировании блоб так превратился бы в
- * предложение с ЧУЖИМИ данными — и выяснилось бы это на execute, где отменить
- * предложение нечем.
+ * Whitespace and line breaks are stripped — a blob copied from an explorer arrives with
+ * them, and kit's decoder chokes on them. The length, however, we check ourselves: on a
+ * string whose length is %4==1 the decoder silently drops the trailing character ("SGVsbG8hA"
+ * yields the same bytes as "SGVsbG8h"). A blob truncated while copying would thus turn into a
+ * proposal with SOMEONE ELSE'S data — and that would surface on execute, where there is no
+ * way to cancel the proposal.
  */
 export function decodeInstructionData(dataBase64: string): Uint8Array {
   const clean = dataBase64.replace(/\s+/g, "");
   if (clean.length % 4 === 1) {
-    throw new Error("Данные обрезаны: это не целый base64 — проверьте, что скопировали блок целиком");
+    throw new Error("Data is truncated: this is not complete base64 — make sure you copied the whole block");
   }
   try {
-    // getBase64Encoder, а не Buffer: под Turbopack полифила Buffer в браузере нет.
+    // getBase64Encoder, not Buffer: under Turbopack there is no Buffer polyfill in the browser.
     return new Uint8Array(getBase64Encoder().encode(clean));
   } catch {
-    throw new Error("Данные инструкции должны быть в base64");
+    throw new Error("Instruction data must be base64");
   }
 }
 
 /**
- * Raw-режим: поддерживаются вложенные инструкции, единственный подписант которых —
- * treasury-PDA (за него подписывает программа через invoke_signed). Внешних
- * подписантов execute предоставить не может, поэтому такие предложения отсекаем
- * здесь: иначе предложение наберёт кворум, но исполнить его будет нельзя никогда.
+ * Raw mode: nested instructions are supported whose only signer is the treasury PDA (the
+ * program signs for it via invoke_signed). Execute cannot supply external signers, so such
+ * proposals are cut off here: otherwise a proposal would reach the quorum but could never
+ * be executed.
  */
 export function buildRawNested(input: {
   programId: Address;
@@ -131,17 +131,17 @@ export function buildRawNested(input: {
   const foreignSigner = input.accounts.find((a) => a.isSigner && a.pubkey !== input.signerPda);
   if (foreignSigner) {
     throw new Error(
-      `Подписантом может быть только treasury-PDA мультисига (${input.signerPda}), ` +
-        `а указан ${foreignSigner.pubkey}: такое предложение невозможно исполнить.`,
+      `Only the multisig treasury PDA (${input.signerPda}) may be a signer, ` +
+        `but ${foreignSigner.pubkey} was given: such a proposal can never be executed.`,
     );
   }
   if (input.accounts.length > MAX_TX_ACCOUNTS) {
-    throw new Error(`Слишком много аккаунтов: ${input.accounts.length}, максимум ${MAX_TX_ACCOUNTS}`);
+    throw new Error(`Too many accounts: ${input.accounts.length}, maximum ${MAX_TX_ACCOUNTS}`);
   }
 
   const data = decodeInstructionData(input.dataBase64);
   if (data.length > MAX_TX_DATA) {
-    throw new Error(`Данные инструкции слишком велики: ${data.length} байт, максимум ${MAX_TX_DATA}`);
+    throw new Error(`Instruction data is too large: ${data.length} bytes, maximum ${MAX_TX_DATA}`);
   }
   const remaining = remainingFromProposal({
     programId: input.programId,

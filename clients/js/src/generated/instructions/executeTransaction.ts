@@ -105,7 +105,7 @@ export type ExecuteTransactionAsyncInput<
 > = {
   multisig: Address<TAccountMultisig>;
   transaction: Address<TAccountTransaction>;
-  /** От его имени программа подписывает вложенную инструкцию через `invoke_signed`. */
+  /** On its behalf the program signs the inner instruction via `invoke_signed`. */
   multisigSigner?: Address<TAccountMultisigSigner>;
 };
 
@@ -179,7 +179,7 @@ export type ExecuteTransactionInput<
 > = {
   multisig: Address<TAccountMultisig>;
   transaction: Address<TAccountTransaction>;
-  /** От его имени программа подписывает вложенную инструкцию через `invoke_signed`. */
+  /** On its behalf the program signs the inner instruction via `invoke_signed`. */
   multisigSigner: Address<TAccountMultisigSigner>;
 };
 
@@ -242,7 +242,7 @@ export type ParsedExecuteTransactionInstruction<
   accounts: {
     multisig: TAccountMetas[0];
     transaction: TAccountMetas[1];
-    /** От его имени программа подписывает вложенную инструкцию через `invoke_signed`. */
+    /** On its behalf the program signs the inner instruction via `invoke_signed`. */
     multisigSigner: TAccountMetas[2];
   };
   data: ExecuteTransactionInstructionData;

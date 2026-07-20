@@ -20,7 +20,7 @@ import {
   type FixedSizeEncoder,
 } from "@solana/kit";
 
-/** Метаданные одного аккаунта вложенной инструкции. */
+/** Metadata of a single account of the inner instruction. */
 export type TransactionAccount = {
   pubkey: Address;
   isSigner: boolean;

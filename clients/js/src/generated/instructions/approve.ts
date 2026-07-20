@@ -103,7 +103,7 @@ export type ApproveInput<
   TAccountOwner extends string = string,
 > = {
   multisig: Address<TAccountMultisig>;
-  /** `has_one = multisig` привязывает предложение к правильному мультисигу (#9). */
+  /** `has_one = multisig` binds the proposal to the correct multisig (#9). */
   transaction: Address<TAccountTransaction>;
   owner: TransactionSigner<TAccountOwner>;
 };
@@ -162,7 +162,7 @@ export type ParsedApproveInstruction<
   programAddress: Address<TProgram>;
   accounts: {
     multisig: TAccountMetas[0];
-    /** `has_one = multisig` привязывает предложение к правильному мультисигу (#9). */
+    /** `has_one = multisig` binds the proposal to the correct multisig (#9). */
     transaction: TAccountMetas[1];
     owner: TAccountMetas[2];
   };

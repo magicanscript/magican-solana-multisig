@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-// e2e ходит в реальный devnet: таймауты щедрые, повторов нет (транзакции не идемпотентны).
+// e2e goes to the real devnet: timeouts are generous, no retries (transactions aren't idempotent).
 export default defineConfig({
   testDir: './e2e',
   timeout: 240_000,
@@ -8,6 +8,6 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: [['list']],
-  // Пользуемся уже запущенным dev-сервером (next dev на 3000).
+  // We use the already running dev server (next dev on 3000).
   use: { baseURL: 'http://localhost:3000', trace: 'retain-on-failure' },
 });

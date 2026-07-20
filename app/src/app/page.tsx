@@ -27,21 +27,21 @@ export default function Home() {
         ) : !connected ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-zinc-300 py-20 text-center dark:border-zinc-700">
             <h1 className="text-2xl font-semibold text-black dark:text-white">
-              Программируемый мультисиг на Solana
+              Programmable multisig on Solana
             </h1>
             <p className="max-w-md text-zinc-500 dark:text-zinc-400">
-              Подключите кошелёк, чтобы увидеть свои мультисиги или создать новый.
+              Connect your wallet to see your multisigs or create a new one.
             </p>
           </div>
         ) : (
           <>
             <div className="mb-6 flex items-center justify-between">
-              <h1 className="text-2xl font-semibold text-black dark:text-white">Мои мультисиги</h1>
+              <h1 className="text-2xl font-semibold text-black dark:text-white">My multisigs</h1>
               <Link
                 href="/create"
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
               >
-                Создать мультисиг
+                Create multisig
               </Link>
             </div>
 
@@ -52,8 +52,9 @@ export default function Home() {
                 ))}
               </div>
             ) : error ? (
-              // Отказ RPC нельзя показывать как «мультисигов нет»: владелец решит,
-              // что подписывать нечего, хотя предложение может ждать его подписи.
+              // An RPC failure must not be rendered as "no multisigs": the owner
+              // would conclude there is nothing to sign, while a proposal may be
+              // waiting for their signature.
               <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-red-300 py-16 text-center dark:border-red-900">
                 <p className="text-sm text-red-600 dark:text-red-400">{humanizeError(error)}</p>
                 <button
@@ -61,12 +62,12 @@ export default function Home() {
                   onClick={() => void refresh()}
                   className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  Повторить
+                  Retry
                 </button>
               </div>
             ) : data.length === 0 ? (
               <div className="rounded-xl border border-dashed border-zinc-300 py-16 text-center text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-                У вас пока нет мультисигов. Создайте первый.
+                You don&apos;t have any multisigs yet. Create your first one.
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

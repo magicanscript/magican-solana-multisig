@@ -11,12 +11,12 @@ import {
 } from '@solana/kit';
 
 /**
- * Кошелёк-дублёр для e2e: реализует ровно тот кусок Wallet Standard, который
- * читает @solana/client (`standard:connect` + `solana:signTransaction`).
+ * A stand-in wallet for e2e: it implements exactly the slice of Wallet Standard that
+ * @solana/client reads (`standard:connect` + `solana:signTransaction`).
  *
- * Приватный ключ в браузер НЕ попадает: страница отдаёт байты транзакции в Node
- * через exposeFunction, там они подписываются и возвращаются. Для приложения это
- * неотличимо от настоящего кошелька — код фронта исполняется тот же самый.
+ * The private key never reaches the browser: the page hands the transaction bytes to Node
+ * via exposeFunction, they are signed there and returned. For the application this is
+ * indistinguishable from a real wallet — the very same frontend code runs.
  */
 export type StubWallet = { name: string; address: string; publicKey: number[] };
 
@@ -24,11 +24,11 @@ export async function loadSigner(keypairPath: string) {
   const bytes = new Uint8Array(JSON.parse(readFileSync(keypairPath, 'utf8')));
   const keyPair = await createKeyPairFromBytes(bytes);
   const address = await getAddressFromPublicKey(keyPair.publicKey);
-  // Публичный ключ — последние 32 байта solana-keygen формата.
+  // The public key is the last 32 bytes of the solana-keygen format.
   return { keyPair, address, publicKey: Array.from(bytes.slice(32)) };
 }
 
-/** Регистрирует кошельки в странице и вешает подпись на Node-сторону. */
+/** Registers the wallets in the page and hooks signing up to the Node side. */
 export async function installWallets(
   page: Page,
   signers: { name: string; keyPair: CryptoKeyPair; address: string; publicKey: number[] }[],
@@ -100,7 +100,7 @@ export async function installWallets(
       };
     });
 
-    // Wallet Standard: кошелёк объявляет себя в ответ на app-ready от приложения.
+    // Wallet Standard: the wallet announces itself in response to app-ready from the app.
     const register = (api: { register: (w: unknown) => void }) => built.forEach((w) => api.register(w));
     window.addEventListener('wallet-standard:app-ready', (e) => register((e as CustomEvent).detail));
     window.dispatchEvent(

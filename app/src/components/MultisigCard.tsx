@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { MultisigView } from '@/lib/multisig';
 import { pluralOwners, shortAddress } from '@/lib/format';
 
-/** Карточка мультисига на дашборде: адрес-ссылка, порог M-of-N, число владельцев. */
+/** A multisig card on the dashboard: linked address, M-of-N threshold, owner count. */
 export function MultisigCard({ view }: { view: MultisigView }) {
   const { address, data } = view;
   const threshold = Number(data.threshold);
@@ -24,7 +24,7 @@ export function MultisigCard({ view }: { view: MultisigView }) {
         </span>
       </div>
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        {ownersCount} {pluralOwners(ownersCount)} · порог {threshold}
+        {ownersCount} {pluralOwners(ownersCount)} · threshold {threshold}
       </p>
     </Link>
   );

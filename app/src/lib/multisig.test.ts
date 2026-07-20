@@ -10,40 +10,40 @@ const view = (addr: Address, owners: Address[]) =>
   ({ address: addr, data: { owners } }) as unknown as MultisigView;
 
 describe("filterOwned", () => {
-  it("оставляет только мультисиги, где owner есть в списке", () => {
+  it("keeps only the multisigs where the owner is in the list", () => {
     const all = [view(me, [me, other]), view(other, [other])];
     expect(filterOwned(all, me).map((m) => m.address)).toEqual([me]);
   });
 
-  it("находит владельца не только на первой позиции", () => {
+  it("finds the owner not only at the first position", () => {
     expect(filterOwned([view(other, [other, me])], me)).toHaveLength(1);
   });
 
-  it("возвращает пусто, когда владельца нет нигде", () => {
+  it("returns empty when the owner is nowhere to be found", () => {
     expect(filterOwned([view(other, [other])], me)).toEqual([]);
   });
 });
 
-describe("memcmp-фильтры", () => {
-  it("discriminatorFilter кодирует дискриминатор в base58 с нулевого offset", () => {
+describe("memcmp filters", () => {
+  it("discriminatorFilter encodes the discriminator as base58 at offset zero", () => {
     const f = discriminatorFilter(MULTISIG_DISCRIMINATOR);
     expect(f.memcmp.offset).toBe(0n);
     expect(f.memcmp.encoding).toBe("base58");
-    // Проверяем round-trip, а не просто "это строка": иначе тест переживёт
-    // перепутанные местами encoder/decoder.
+    // We check the round-trip, not just "it's a string": otherwise the test would survive
+    // an encoder/decoder swapped by mistake.
     expect(new Uint8Array(getBase58Encoder().encode(f.memcmp.bytes))).toEqual(
       new Uint8Array(MULTISIG_DISCRIMINATOR),
     );
   });
 
-  it("Multisig и Transaction различаются дискриминатором", () => {
+  it("Multisig and Transaction differ by their discriminator", () => {
     expect(discriminatorFilter(MULTISIG_DISCRIMINATOR).memcmp.bytes).not.toBe(
       discriminatorFilter(TRANSACTION_DISCRIMINATOR).memcmp.bytes,
     );
   });
 
-  it("addressFilter кладёт адрес как base58 по заданному offset", () => {
-    // Transaction.multisig — первое поле после дискриминатора, значит offset 8.
+  it("addressFilter puts the address as base58 at the given offset", () => {
+    // Transaction.multisig is the first field after the discriminator, hence offset 8.
     const f = addressFilter(8n, me);
     expect(f.memcmp).toEqual({ offset: 8n, encoding: "base58", bytes: me });
   });

@@ -46,17 +46,17 @@ const row = (props: Partial<Parameters<typeof ProposalRow>[0]> = {}) =>
     />,
   );
 
-const approveBtn = () => screen.getByRole("button", { name: "Одобрить" });
-const executeBtn = () => screen.getByRole("button", { name: "Исполнить" });
+const approveBtn = () => screen.getByRole("button", { name: "Approve" });
+const executeBtn = () => screen.getByRole("button", { name: "Execute" });
 
 describe("ProposalRow", () => {
-  it("владельцу без голоса — одобрение доступно, исполнение нет (кворум не собран)", () => {
+  it("an owner who has not voted can approve but not execute (no quorum yet)", () => {
     row();
     expect(approveBtn()).toBeEnabled();
     expect(executeBtn()).toBeDisabled();
   });
 
-  it("клик по доступной кнопке отдаёт наверх само предложение", () => {
+  it("clicking an enabled button hands the proposal itself upwards", () => {
     const onApprove = vi.fn();
     const view = proposal();
     row({ view, onApprove });
@@ -64,36 +64,37 @@ describe("ProposalRow", () => {
     expect(onApprove).toHaveBeenCalledWith(view);
   });
 
-  it("проголосовавшему одобрение закрыто, а причина видна текстом", () => {
+  it("an owner who already voted cannot approve, and the reason is visible as text", () => {
     row({ me: A });
     expect(approveBtn()).toBeDisabled();
-    expect(screen.getByText(/уже одобрили/i)).toBeInTheDocument();
+    expect(screen.getByText(/already approved this proposal/i)).toBeInTheDocument();
   });
 
-  it("при собранном кворуме исполнение доступно", () => {
+  it("execution becomes available once the quorum is reached", () => {
     row({ view: proposal({ signers: [true, true] }) });
     expect(executeBtn()).toBeEnabled();
   });
 
-  it("исполненное предложение мертво целиком", () => {
+  it("an executed proposal is dead through and through", () => {
     row({ view: proposal({ didExecute: true, signers: [true, true] }) });
     expect(approveBtn()).toBeDisabled();
     expect(executeBtn()).toBeDisabled();
-    expect(screen.getByText(/уже исполнено/i)).toBeInTheDocument();
+    expect(screen.getByText(/already been executed/i)).toBeInTheDocument();
   });
 
-  // Пока летит другое действие, кнопки гаснут — но это причина на секунду, и
-  // печатать её приговором строке нельзя (диалог с действием и так на экране).
-  it("во время другого действия кнопки гаснут без объясняющей подписи", () => {
+  // While another action is in flight the buttons go dark — but that reason lasts a
+  // second, and printing it as a verdict on the row is wrong (the dialog with the
+  // action is on screen anyway).
+  it("during another action the buttons go dark without an explaining caption", () => {
     row({ view: proposal({ signers: [true, true] }), busy: true });
     expect(approveBtn()).toBeDisabled();
     expect(executeBtn()).toBeDisabled();
-    expect(screen.queryByText(/дождитесь/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/wait for the current action/i)).not.toBeInTheDocument();
   });
 
-  // Предложение с посторонним подписантом не исполнится никогда: подписать программа
-  // умеет только за казну. Кворум при этом собран — и кнопка выглядела бы рабочей.
-  it("исполнение закрыто у предложения с посторонним подписантом", () => {
+  // A proposal with a foreign signer will never execute: the program can only sign for
+  // the treasury. The quorum is reached, though — so the button would look functional.
+  it("execution is blocked for a proposal with a foreign signer", () => {
     row({
       view: proposal({
         signers: [true, true],
@@ -101,26 +102,26 @@ describe("ProposalRow", () => {
       }),
     });
     expect(executeBtn()).toBeDisabled();
-    expect(screen.getByText(/посторонний подписант/i)).toBeInTheDocument();
+    expect(screen.getByText(/foreign signer/i)).toBeInTheDocument();
   });
 
-  it("без кошелька недоступно ничего", () => {
+  it("nothing is available without a wallet", () => {
     row({ me: undefined });
     expect(approveBtn()).toBeDisabled();
     expect(executeBtn()).toBeDisabled();
-    expect(screen.getByText(/подключите кошелёк/i)).toBeInTheDocument();
+    expect(screen.getByText(/connect your wallet/i)).toBeInTheDocument();
   });
 
-  // Голоса относятся к прежним правилам, поэтому сравнивать их с текущим порогом
-  // нельзя: «2 / 2» у мёртвого предложения читалось бы как «кворум собран».
-  it("после смены правил не показывает счёт голосов против текущего порога", () => {
+  // The approvals belong to the previous rules, so they must not be compared with the
+  // current threshold: "2 / 2" on a dead proposal would read as "quorum reached".
+  it("after a rules change it does not show the approval count against the current threshold", () => {
     row({ view: proposal({ ownerSetSeqno: 0, signers: [true, true] }), ms: ms({ ownerSetSeqno: 1 }) });
     expect(screen.queryByText("2 / 2")).not.toBeInTheDocument();
-    // exact: «Устарело» — бейдж, а подсказка внизу оканчивается на «устарело».
-    expect(screen.getByText("Устарело", { exact: true })).toBeInTheDocument();
+    // exact: "Outdated" is the badge, while the hint below also ends with "outdated".
+    expect(screen.getByText("Outdated", { exact: true })).toBeInTheDocument();
   });
 
-  it("показывает индекс предложения, а при неизвестном — не выдумывает его", () => {
+  it("shows the proposal index and does not invent one when it is unknown", () => {
     row({ index: 3 });
     expect(screen.getByText("#3")).toBeInTheDocument();
     cleanup();

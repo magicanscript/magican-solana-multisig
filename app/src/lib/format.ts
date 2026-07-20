@@ -1,19 +1,19 @@
 import type { Address } from '@solana/kit';
 
-/** Сокращает адрес до `ABCD…WXYZ` для компактного показа в UI. */
+/** Shortens an address to `ABCD…WXYZ` for a compact display in the UI. */
 export function shortAddress(address: string, lead = 4, tail = 4): string {
   if (address.length <= lead + tail + 1) return address;
   return `${address.slice(0, lead)}…${address.slice(-tail)}`;
 }
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
-/** Лампорты — u64 on-chain; всё, что выше, невыразимо в инструкции. */
+/** Lamports are a u64 on-chain; anything above that is inexpressible in an instruction. */
 export const MAX_LAMPORTS = 18_446_744_073_709_551_615n;
 
-/** Лампорты (bigint) → строка SOL с обрезкой хвостовых нулей. */
+/** Lamports (bigint) → a SOL string with the trailing zeros trimmed. */
 export function lamportsToSol(lamports: bigint, maxFractionDigits = 6): string {
-  // Остаток BigInt наследует знак делимого, и минус уезжал в середину строки
-  // («0.0-1»). Знак снимаем заранее и возвращаем на место в конце.
+  // A BigInt remainder inherits the sign of the dividend, and the minus drifted into the
+  // middle of the string ("0.0-1"). We strip the sign up front and put it back at the end.
   const sign = lamports < 0n ? '-' : '';
   const abs = lamports < 0n ? -lamports : lamports;
   const whole = abs / LAMPORTS_PER_SOL;
@@ -24,39 +24,31 @@ export function lamportsToSol(lamports: bigint, maxFractionDigits = 6): string {
 }
 
 /**
- * Строка SOL → лампорты, точно. Через Number считать нельзя: `0.1 * 1e9` уже
- * даёт погрешность, а «MAX» обязан отправить ровно ту сумму, что показана.
+ * A SOL string → lamports, exactly. Going through Number is not allowed: `0.1 * 1e9` already
+ * gives an error, while "MAX" must send exactly the amount that is displayed.
  */
 export function solToLamports(input: string): bigint {
   const s = input.trim();
   if (!/^\d+\.?\d*$|^\.\d+$/.test(s)) {
-    throw new Error("Введите сумму в SOL числом, например 0.25");
+    throw new Error("Enter the amount in SOL as a number, e.g. 0.25");
   }
   const [whole, frac = ""] = s.split(".");
   if (frac.length > 9) {
-    throw new Error("Дробнее одного лампорта: не более 9 знаков после точки");
+    throw new Error("Finer than a single lamport: no more than 9 digits after the point");
   }
   const lamports = BigInt(whole || "0") * LAMPORTS_PER_SOL + BigInt(frac.padEnd(9, "0"));
-  // Кодировщик инструкции (setBigUint64) переполнение НЕ ловит — молча берёт
-  // остаток по модулю 2^64, и on-chain уехала бы совсем другая сумма.
+  // The instruction encoder (setBigUint64) does NOT catch the overflow — it silently takes
+  // the remainder modulo 2^64, and a completely different amount would go on-chain.
   if (lamports > MAX_LAMPORTS) {
-    throw new Error("Сумма слишком велика: больше, чем вообще существует лампортов");
+    throw new Error("The amount is too large: more than the lamports that exist at all");
   }
   return lamports;
 }
 
-/**
- * Склонение «владелец» по числу. Наивное `n === 1 ? 'владелец' : 'владельцев'`
- * давало «2 владельцев»; в русском три формы, и 11–14 — исключение из правила хвоста.
- */
+/** The plural form of "owner" by count. */
 export function pluralOwners(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return "владельцев";
-  const mod10 = n % 10;
-  if (mod10 === 1) return "владелец";
-  if (mod10 >= 2 && mod10 <= 4) return "владельца";
-  return "владельцев";
+  return n === 1 ? "owner" : "owners";
 }
 
-/** Явное сужение строки к бренду Address (для ссылок/пропсов). */
+/** An explicit narrowing of a string to the Address brand (for links/props). */
 export const asAddress = (s: string): Address => s as Address;

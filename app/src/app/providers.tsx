@@ -5,15 +5,16 @@ import { SolanaProvider } from "@solana/react-hooks";
 import { autoDiscover, createClient, type SolanaClient } from "@solana/client";
 import { RPC_URL, WS_URL } from "@/lib/solana";
 
-// autoDiscover() снимает СРЕЗ зарегистрированных на этот момент Wallet-Standard
-// кошельков. Реестр на самом деле событийный (есть watchWalletStandardConnectors),
-// но createClient принимает список один раз, а client.connectors — Readonly без
-// апдейта, и connectWallet резолвит коннектор именно через него. Значит показать
-// поздно зарегистрировавшийся кошелёк можно только вместе с пересозданием клиента,
-// а это рвёт активную сессию. Живём со срезом: getWallets() синхронно шлёт
-// app-ready, и расширения успевают зарегистрироваться в том же тике. Пользователю,
-// который всё же не увидел свой кошелёк, предлагаем перезагрузку (WalletButton).
-// Клиент создаём лениво, а не на module-scope при загрузке чанка.
+// autoDiscover() takes a SNAPSHOT of the Wallet-Standard wallets registered at
+// that moment. The registry is actually event-driven (there is
+// watchWalletStandardConnectors), but createClient accepts the list only once,
+// and client.connectors is a Readonly with no updates — and connectWallet
+// resolves the connector through exactly that list. So a wallet that registers
+// late can only be surfaced by recreating the client, and that tears down the
+// active session. We live with the snapshot: getWallets() synchronously emits
+// app-ready, and extensions manage to register within the same tick. A user who
+// still doesn't see their wallet is offered a page reload (WalletButton).
+// The client is created lazily, not at module scope when the chunk loads.
 let _client: SolanaClient | null = null;
 
 export function getSolanaClient(): SolanaClient {

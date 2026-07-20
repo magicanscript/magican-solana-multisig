@@ -10,104 +10,105 @@ const ms = { owners: [A, B], threshold: 2, ownerSetSeqno: 0 };
 const tx = { didExecute: false, signers: [true, false], ownerSetSeqno: 0 };
 
 describe("actionBlocks", () => {
-  it("владельцу, который ещё не голосовал, одобрение разрешено", () => {
+  it("an owner who hasn't voted yet is allowed to approve", () => {
     expect(actionBlocks(tx, ms, B, false).approve).toBeNull();
   });
 
-  it("без кошелька заблокировано всё", () => {
+  it("without a wallet everything is blocked", () => {
     const b = actionBlocks(tx, ms, undefined, false);
-    expect(b.approve).toMatch(/кошел/i);
-    expect(b.execute).toMatch(/кошел/i);
+    expect(b.approve).toMatch(/wallet/i);
+    expect(b.execute).toMatch(/wallet/i);
   });
 
-  it("не-владельцу одобрение запрещено, а исполнение — нет (оно permissionless)", () => {
+  it("a non-owner may not approve, but may execute (execute is permissionless)", () => {
     const ready = { ...tx, signers: [true, true] };
     const b = actionBlocks(ready, ms, STRANGER, false);
-    expect(b.approve).toMatch(/не владелец/i);
+    expect(b.approve).toMatch(/not an owner/i);
     expect(b.execute).toBeNull();
   });
 
-  it("повторный голос запрещён: маска булева, второй раз ничего не даёт", () => {
-    expect(actionBlocks(tx, ms, A, false).approve).toMatch(/уже одобрили/i);
+  it("a repeated vote is forbidden: the mask is boolean, a second time changes nothing", () => {
+    expect(actionBlocks(tx, ms, A, false).approve).toMatch(/already approved/i);
   });
 
-  it("исполнение недоступно, пока не собран кворум", () => {
-    expect(actionBlocks(tx, ms, B, false).execute).toMatch(/кворум/i);
+  it("execution is unavailable until the quorum is reached", () => {
+    expect(actionBlocks(tx, ms, B, false).execute).toMatch(/quorum/i);
   });
 
-  it("после исполнения запрещено обе кнопки — и причина названа честно", () => {
+  it("after execution both buttons are blocked — and the reason is stated honestly", () => {
     const done = { ...tx, didExecute: true, signers: [true, true] };
     const b = actionBlocks(done, ms, B, false);
-    // Не «ждём кворума»: кворум как раз собран. Врать причиной нельзя — пользователь
-    // будет ждать подписей у предложения, которое уже исполнено.
-    expect(b.approve).toMatch(/исполнен/i);
-    expect(b.execute).toMatch(/исполнен/i);
+    // Not "waiting for the quorum": the quorum is in fact reached. Lying with the reason is
+    // not allowed — the user would wait for approvals on a proposal that is already executed.
+    expect(b.approve).toMatch(/executed/i);
+    expect(b.execute).toMatch(/executed/i);
   });
 
-  it("устаревшее предложение: обе кнопки заблокированы сменой набора владельцев", () => {
+  it("an outdated proposal: both buttons are blocked by the owner set change", () => {
     const stale = { ...tx, signers: [true, true], ownerSetSeqno: 1 };
     const b = actionBlocks(stale, ms, B, false);
-    expect(b.approve).toMatch(/владельц/i);
-    expect(b.execute).toMatch(/владельц/i);
+    expect(b.approve).toMatch(/owners/i);
+    expect(b.execute).toMatch(/owners/i);
   });
 
-  // Маска заморожена на СВОЁМ наборе владельцев: сопоставлять её с текущим списком
-  // нельзя. Иначе «вы уже одобрили» показалось бы тому, чей голос принадлежит
-  // другому человеку, — а настоящая причина (предложение мертво) потерялась бы.
-  it("у устаревшего предложения причина — набор владельцев, а не чужой голос", () => {
+  // The mask is frozen on ITS OWN owner set: matching it against the current list is not
+  // allowed. Otherwise "you have already approved" would be shown to someone whose approval
+  // belongs to a different person — and the real reason (the proposal is dead) would be lost.
+  it("for an outdated proposal the reason is the owner set, not someone else's approval", () => {
     const stale = { ...tx, signers: [true, false], ownerSetSeqno: 1 };
-    expect(actionBlocks(stale, ms, A, false).approve).not.toMatch(/уже одобрили/i);
+    expect(actionBlocks(stale, ms, A, false).approve).not.toMatch(/already approved/i);
   });
 
-  // После set_owners длина маски и длина списка владельцев расходятся. Читать маску
-  // по индексу в НОВОМ списке — это выход за границы (undefined) либо чужой голос.
-  // Спасает только порядок веток: stale проверяется раньше маски. Тест держит порядок.
-  it("маска короче нового списка владельцев — до индексации дело не доходит", () => {
+  // After set_owners the mask length and the owners list length diverge. Reading the mask by
+  // an index in the NEW list means going out of bounds (undefined) or hitting someone else's
+  // approval. Only the branch order saves us: stale is checked before the mask. This test holds it.
+  it("the mask is shorter than the new owners list — indexing is never reached", () => {
     const grown = { owners: [A, B, STRANGER], threshold: 2, ownerSetSeqno: 1 };
     const old = { didExecute: false, signers: [true, true], ownerSetSeqno: 0 };
     const b = actionBlocks(old, grown, STRANGER, false);
-    expect(b.approve).toMatch(/владельц/i);
-    expect(b.execute).toMatch(/владельц/i);
+    expect(b.approve).toMatch(/owners/i);
+    expect(b.execute).toMatch(/owners/i);
   });
 
-  it("во время другого действия заблокировано всё — но причина временная", () => {
-    // Предложение, где иначе доступны ОБА действия: кворум собран, а мой голос ещё нет.
+  it("during another action everything is blocked — but the reason is temporary", () => {
+    // A proposal where BOTH actions would otherwise be available: the quorum is reached,
+    // and my own approval is not in yet.
     const ready = { ...tx, signers: [true, true], ownerSetSeqno: 0 };
     const three = { ...ms, owners: [A, B, STRANGER], threshold: 2 };
     const b = actionBlocks({ ...ready, signers: [true, true, false] }, three, STRANGER, true);
-    expect(b.approve).toMatch(/дождитесь/i);
-    expect(b.execute).toMatch(/дождитесь/i);
+    expect(b.approve).toMatch(/wait/i);
+    expect(b.execute).toMatch(/wait/i);
   });
 
-  // Постоянная причина важнее временной: «дождитесь» у чужого мультисига сбивало бы
-  // с толку — ждать бессмысленно, одобрять всё равно нельзя.
-  it("постоянная причина показывается вместо временной", () => {
-    expect(actionBlocks(tx, ms, STRANGER, true).approve).toMatch(/не владелец/i);
+  // A permanent reason outranks a temporary one: "wait" on someone else's multisig would be
+  // confusing — waiting is pointless, approving is forbidden anyway.
+  it("the permanent reason is shown instead of the temporary one", () => {
+    expect(actionBlocks(tx, ms, STRANGER, true).approve).toMatch(/not an owner/i);
   });
 
-  // change_threshold бампает тот же owner_set_seqno, что и set_owners (governance.rs:
-  // «используем его как общую версию конфигурации»). Писать «набор владельцев
-  // изменился» — врать: владельцы те же, поменяли порог, и человек пойдёт искать
-  // несуществующее увольнение.
-  it("причина устаревания говорит о правилах, а не только о владельцах", () => {
+  // change_threshold bumps the same owner_set_seqno as set_owners (governance.rs: "we use it
+  // as the shared version of the configuration"). Saying "the owner set changed" is a lie:
+  // the owners are the same, the threshold was changed, and the person will go looking for a
+  // removal that never happened.
+  it("the staleness reason talks about the rules, not only about the owners", () => {
     const stale = { ...tx, ownerSetSeqno: 1 };
     const b = actionBlocks(stale, ms, B, false);
-    expect(b.approve).toMatch(/правил/i);
-    expect(b.approve).not.toMatch(/^Набор владельцев изменился/);
+    expect(b.approve).toMatch(/rules/i);
+    expect(b.approve).not.toMatch(/^The owner set changed/);
   });
 
-  // Предложение с посторонним подписантом создать через наш UI нельзя (lib/ix.ts его
-  // отвергает), но оно могло прийти из CLI. execute_transaction.rs сохраняет чужой
-  // is_signer в AccountMeta, а подписать программа умеет только за свою казну —
-  // такое предложение обречено НАВСЕГДА. Кнопка «Исполнить» обязана это знать.
-  it("исполнение закрыто, если во вложенной инструкции чужой подписант", () => {
+  // A proposal with a foreign signer cannot be created through our UI (lib/ix.ts rejects it),
+  // but it could have come from a CLI. execute_transaction.rs keeps the foreign is_signer in
+  // the AccountMeta, while the program can only sign for its own treasury — such a proposal
+  // is doomed FOREVER. The "Execute" button has to know this.
+  it("execution is closed if the nested instruction has a foreign signer", () => {
     const ready = { ...tx, signers: [true, true] };
     const foreign = { ...ready, accounts: [{ pubkey: STRANGER, isSigner: true, isWritable: false }] };
     const b = actionBlocks(foreign, ms, B, false, A);
-    expect(b.execute).toMatch(/подписант/i);
+    expect(b.execute).toMatch(/foreign signer/i);
   });
 
-  it("казна как подписант исполнению не мешает — ради этого всё и сделано", () => {
+  it("the treasury as a signer does not block execution — that is the whole point", () => {
     const ready = { ...tx, signers: [true, true] };
     const ok = { ...ready, accounts: [{ pubkey: A, isSigner: true, isWritable: true }] };
     expect(actionBlocks(ok, ms, B, false, A).execute).toBeNull();
@@ -115,28 +116,28 @@ describe("actionBlocks", () => {
 });
 
 describe("actionHint", () => {
-  it("молчит, пока хоть одно действие доступно", () => {
-    expect(actionHint({ approve: null, execute: "нет кворума" })).toBeNull();
+  it("stays silent while at least one action is available", () => {
+    expect(actionHint({ approve: null, execute: "no quorum" })).toBeNull();
   });
 
-  // «Дождитесь» — причина на секунду; печатать её как приговор строке нельзя, тем
-  // более что диалог с текущим действием и так на экране.
-  it("не показывает временную причину как объяснение", () => {
+  // "Wait" is a reason that lasts a second; printing it as a verdict on the row is not
+  // allowed, all the more so since the dialog for the current action is on screen anyway.
+  it("does not show a temporary reason as an explanation", () => {
     expect(
-      actionHint({ approve: "Вы не владелец этого мультисига", execute: BUSY_REASON }),
+      actionHint({ approve: "You are not an owner of this multisig", execute: BUSY_REASON }),
     ).toBeNull();
   });
 
-  it("одну общую причину печатает один раз", () => {
-    const same = "Предложение уже исполнено";
+  it("prints a single shared reason only once", () => {
+    const same = "The proposal has already been executed";
     expect(actionHint({ approve: same, execute: same })).toBe(same);
   });
 
-  // Частый случай: голос отдан, кворума нет. Причина approve без причины execute
-  // оставляет вопрос «а исполнить-то почему нельзя» без ответа.
-  it("разные причины показывает обе", () => {
-    const hint = actionHint({ approve: "Вы уже одобрили", execute: "Доступно, когда собран кворум" });
-    expect(hint).toMatch(/уже одобрили/i);
-    expect(hint).toMatch(/кворум/i);
+  // A frequent case: the approval is in, the quorum is not. The approve reason without the
+  // execute reason leaves the question "so why can't it be executed" unanswered.
+  it("shows both reasons when they differ", () => {
+    const hint = actionHint({ approve: "You have already approved", execute: "Available once the quorum is reached" });
+    expect(hint).toMatch(/already approved/i);
+    expect(hint).toMatch(/quorum/i);
   });
 });

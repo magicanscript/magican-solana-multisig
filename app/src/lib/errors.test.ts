@@ -6,12 +6,12 @@ import {
 } from "@solana/kit";
 import { extractCustomErrorCode, humanizeError, simulationFailure } from "./errors";
 
-// Так kit сообщает про custom program error: код лежит числом в context,
-// а не hex-строкой в message.
+// This is how kit reports a custom program error: the code sits in context as a number,
+// not as a hex string in the message.
 const customError = (code: number) =>
   new SolanaError(SOLANA_ERROR__INSTRUCTION_ERROR__CUSTOM, { code, index: 0 });
 
-// Реальный путь отправки: preflight-ошибка с логами, custom — во вложенном cause.
+// The real sending path: a preflight error with logs, custom — in the nested cause.
 const preflightError = (cause: unknown, logs: string[] = []) =>
   new SolanaError(SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE, {
     accounts: null,
@@ -19,23 +19,23 @@ const preflightError = (cause: unknown, logs: string[] = []) =>
     innerInstructions: null,
     logs,
     returnData: null,
-    unitsConsumed: 1234n, // bigint в context — JSON.stringify на нём падает
+    unitsConsumed: 1234n, // a bigint in context — JSON.stringify chokes on it
   } as never);
 
 describe("extractCustomErrorCode", () => {
-  it("берёт код из context настоящего SolanaError", () => {
+  it("takes the code from the context of a real SolanaError", () => {
     expect(extractCustomErrorCode(customError(6005))).toBe(6005);
   });
 
-  it("находит код во вложенном cause под preflight-ошибкой", () => {
+  it("finds the code in the nested cause under a preflight error", () => {
     expect(extractCustomErrorCode(preflightError(customError(6003)))).toBe(6003);
   });
 
-  it("не падает на bigint в context", () => {
+  it("does not choke on a bigint in context", () => {
     expect(extractCustomErrorCode(preflightError(customError(6004), ["log"]))).toBe(6004);
   });
 
-  it("вытаскивает hex-код из логов симуляции, когда структурного кода нет", () => {
+  it("pulls the hex code out of the simulation logs when there is no structural code", () => {
     const err = preflightError(undefined, [
       "Program EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG invoke [1]",
       "Program EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG failed: custom program error: 0x1775",
@@ -43,126 +43,126 @@ describe("extractCustomErrorCode", () => {
     expect(extractCustomErrorCode(err)).toBe(6005);
   });
 
-  it("понимает текстовую форму с решёткой (Custom program error: #6006)", () => {
+  it("understands the textual form with a hash sign (Custom program error: #6006)", () => {
     expect(extractCustomErrorCode(new Error("Custom program error: #6006 (instruction #1)"))).toBe(6006);
   });
 
-  it("возвращает null, когда кода нет", () => {
+  it("returns null when there is no code", () => {
     expect(extractCustomErrorCode(new Error("boom"))).toBe(null);
   });
 });
 
 describe("humanizeError", () => {
-  it("NotEnoughSigners из настоящего SolanaError → про подписи", () => {
-    expect(humanizeError(customError(6005))).toMatch(/подпис/i);
+  it("NotEnoughSigners from a real SolanaError → about approvals", () => {
+    expect(humanizeError(customError(6005))).toMatch(/approvals/i);
   });
 
-  it("InvalidOwnerSetForExecute через preflight+cause → про устаревшее предложение", () => {
-    expect(humanizeError(preflightError(customError(6006)))).toMatch(/устарел/i);
+  it("InvalidOwnerSetForExecute via preflight+cause → about an outdated proposal", () => {
+    expect(humanizeError(preflightError(customError(6006)))).toMatch(/outdated/i);
   });
 
-  it("NotAnOwner → про владельца", () => {
-    expect(humanizeError(customError(6003))).toMatch(/владелец/i);
+  it("NotAnOwner → about the owner", () => {
+    expect(humanizeError(customError(6003))).toMatch(/owner/i);
   });
 
-  it("чужой custom-код (не наш) не выдаётся за нашу ошибку", () => {
-    expect(humanizeError(customError(1234))).not.toMatch(/подпис|владелец|кворум/i);
+  it("someone else's custom code (not ours) is not passed off as our error", () => {
+    expect(humanizeError(customError(1234))).not.toMatch(/approval|owner|quorum/i);
   });
 
-  it("отказ подписи в кошельке распознаётся", () => {
-    expect(humanizeError(new Error("User rejected the request"))).toMatch(/отклон/i);
+  it("a signature refusal in the wallet is recognized", () => {
+    expect(humanizeError(new Error("User rejected the request"))).toMatch(/rejected/i);
   });
 
-  it("неизвестная ошибка возвращается как есть", () => {
+  it("an unknown error is returned as is", () => {
     expect(humanizeError(new Error("boom"))).toContain("boom");
   });
 });
 
-// Симуляция может ВЕРНУТЬСЯ УСПЕШНО и при этом сообщить, что транзакция упала:
-// причина лежит структурой в value.err, а не текстом и не исключением RPC.
+// A simulation can COME BACK SUCCESSFULLY and still report that the transaction failed:
+// the reason sits as a structure in value.err, not as text and not as an RPC exception.
 describe("simulationFailure", () => {
-  it("достаёт наш код ошибки из структуры InstructionError/Custom", () => {
+  it("digs our error code out of the InstructionError/Custom structure", () => {
     const err = simulationFailure({ InstructionError: [0, { Custom: 6005 }] });
     expect(extractCustomErrorCode(err)).toBe(6005);
-    expect(humanizeError(err)).toMatch(/кворум/i);
+    expect(humanizeError(err)).toMatch(/quorum/i);
   });
 
-  it("находит код в логах программы, если структура нераспознаваема", () => {
+  it("finds the code in the program logs when the structure is unrecognizable", () => {
     const err = simulationFailure("Something opaque", [
       "Program EKYN… failed: custom program error: 0x1774",
     ]);
-    expect(humanizeError(err)).toMatch(/уже исполнено/i);
+    expect(humanizeError(err)).toMatch(/already been executed/i);
   });
 
-  it("не падает на bigint внутри err (JSON.stringify их не умеет)", () => {
+  it("does not choke on bigints inside err (JSON.stringify cannot handle them)", () => {
     expect(() => simulationFailure({ InsufficientFundsForRent: { account_index: 1n } })).not.toThrow();
   });
 
-  it("нераспознанное показывает читаемо, а не [object Object]", () => {
+  it("shows the unrecognized readably, not as [object Object]", () => {
     expect(humanizeError(simulationFailure({ AccountNotFound: true }))).not.toMatch(/\[object/);
   });
 
-  // Рантайм отвергает перевод, оставляющий аккаунт ниже rent-exempt. Без своего
-  // текста это ловил /insufficient/ и врал: «Недостаточно SOL для комиссии».
-  it("InsufficientFundsForRent объясняет ренту, а не комиссию кошелька", () => {
+  // The runtime rejects a transfer that leaves an account below rent-exempt. Without its own
+  // text, /insufficient/ caught it and lied: "Not enough SOL for the fee".
+  it("InsufficientFundsForRent explains the rent, not the wallet fee", () => {
     const err = simulationFailure({ InsufficientFundsForRent: { account_index: 2n } });
-    expect(humanizeError(err)).toMatch(/аренд|rent|минимум/i);
-    expect(humanizeError(err)).not.toMatch(/комисси/i);
+    expect(humanizeError(err)).toMatch(/rent|minimum/i);
+    expect(humanizeError(err)).not.toMatch(/fee/i);
   });
 });
 
-describe("коды чужих программ и Anchor", () => {
-  // \d{4} без границы резал 60001 до 6000 → чужая ошибка выдавалась за нашу.
-  it("не режет коды длиннее четырёх цифр", () => {
+describe("codes of other programs and of Anchor", () => {
+  // \d{4} without a boundary clipped 60001 to 6000 → someone else's error was passed off as ours.
+  it("does not clip codes longer than four digits", () => {
     const err = simulationFailure({ InstructionError: [0, { Custom: 60001 }] });
     expect(extractCustomErrorCode(err)).toBe(60001);
-    expect(humanizeError(err)).not.toMatch(/Порог должен быть/);
+    expect(humanizeError(err)).not.toMatch(/Threshold must be/);
   });
 
-  it("наши четырёхзначные коды по-прежнему разбираются", () => {
+  it("our four-digit codes are still parsed", () => {
     expect(extractCustomErrorCode(simulationFailure({ InstructionError: [0, { Custom: 6005 }] }))).toBe(6005);
   });
 
-  it("hex-код из логов не ломается", () => {
+  it("a hex code from the logs does not break", () => {
     const err = simulationFailure("opaque", ["Program failed: custom program error: 0xea61"]);
     expect(extractCustomErrorCode(err)).toBe(60001);
   });
 
-  // Гонка индекса предложения: два владельца создают одновременно → Anchor 2006.
-  it("ConstraintSeeds подсказывает обновить страницу", () => {
+  // A proposal index race: two owners create at the same time → Anchor 2006.
+  it("ConstraintSeeds hints at refreshing the page", () => {
     const err = simulationFailure({ InstructionError: [0, { Custom: 2006 }] });
-    expect(humanizeError(err)).toMatch(/обнови|устарел/i);
+    expect(humanizeError(err)).toMatch(/refresh|stale/i);
   });
 
-  // Занятый seed (create_multisig) и занятый индекс (create_transaction) приходят
-  // как Custom:0 от System Program — «уже используется» видно только в логах.
-  it("занятый аккаунт объясняется человеческим текстом, а не дампом Allocate", () => {
+  // A taken seed (create_multisig) and a taken index (create_transaction) arrive
+  // as Custom:0 from the System Program — "already in use" is visible only in the logs.
+  it("a taken account is explained in human text, not as an Allocate dump", () => {
     const err = simulationFailure({ InstructionError: [0, { Custom: 0 }] }, [
       'Allocate: account Address { address: BWxU…UZZP } already in use',
     ]);
-    expect(humanizeError(err)).toMatch(/уже существует|уже занят/i);
+    expect(humanizeError(err)).toMatch(/already exists|is taken/i);
     expect(humanizeError(err)).not.toMatch(/Allocate/);
   });
 });
 
-// deepText сгребает и логи программы; классифицировать по ним нельзя — иначе
-// чужое слово «denied» в логе выдаётся за отказ пользователя в кошельке.
-describe("классификация не путает логи программы с ответом кошелька", () => {
-  it("«access denied» в логах программы НЕ выдаётся за отказ подписи", () => {
+// deepText rakes in the program logs too; classifying by them is not allowed — otherwise
+// someone else's word "denied" in a log gets passed off as the user's refusal in the wallet.
+describe("classification does not confuse program logs with the wallet's answer", () => {
+  it('"access denied" in the program logs is NOT passed off as a signature refusal', () => {
     const err = simulationFailure({ InstructionError: [0, "PrivilegeEscalation"] }, [
       "Program log: AnchorError: access denied for this vault",
     ]);
-    expect(humanizeError(err)).not.toMatch(/отклонена в кошельке/i);
+    expect(humanizeError(err)).not.toMatch(/rejected in the wallet/i);
   });
 
-  it("настоящий отказ кошелька по-прежнему распознаётся", () => {
-    expect(humanizeError(new Error("User rejected the request"))).toMatch(/отклонена в кошельке/i);
+  it("a real wallet refusal is still recognized", () => {
+    expect(humanizeError(new Error("User rejected the request"))).toMatch(/rejected in the wallet/i);
   });
 
-  it("«insufficient» в логах программы не выдаётся за нехватку SOL на комиссию", () => {
+  it('"insufficient" in the program logs is not passed off as not enough SOL for the fee', () => {
     const err = simulationFailure({ InstructionError: [0, "Custom"] }, [
       "Program log: insufficient liquidity in pool",
     ]);
-    expect(humanizeError(err)).not.toMatch(/Недостаточно SOL для комиссии/i);
+    expect(humanizeError(err)).not.toMatch(/Not enough SOL for the fee/i);
   });
 });

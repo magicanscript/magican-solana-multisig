@@ -15,22 +15,23 @@ type Entry = {
 const EMPTY: Entry = { data: null, signerPda: null };
 
 /**
- * Один мультисиг по адресу: правила (`data`) и адрес treasury-PDA.
+ * A single multisig by address: its rules (`data`) and the treasury-PDA address.
  *
- * Баланс казны хук НЕ отдаёт: разовый `getBalance` после пополнения врёт —
- * публичный RPC за балансировщиком отвечает с ноды, которая ещё не догнала
- * подтверждение с другой. Баланс берётся реактивно, через `useBalance(…, {watch})`
- * поверх WS-подписки (см. страницу мультисига).
+ * The hook does NOT expose the treasury balance: a one-shot `getBalance` after
+ * funding lies — a public RPC behind a load balancer answers from a node that has
+ * not yet caught up with a confirmation seen by another one. The balance is read
+ * reactively, via `useBalance(…, {watch})` on top of a WebSocket subscription (see
+ * the multisig page).
  *
- * Всё привязано к адресу, для которого получено. Иначе при переходе между
- * мультисигами под новым заголовком отрисовалась бы ЧУЖАЯ казна — и «Пополнить»
- * ушло бы на предыдущую treasury-PDA. `loading` — производное, поэтому эффект
- * ничего синхронно не сбрасывает.
+ * Everything is bound to the address it was fetched for. Otherwise, navigating
+ * between multisigs would render ANOTHER multisig's treasury under the new
+ * heading — and "Fund" would go to the previous treasury PDA. `loading` is
+ * derived, so the effect never resets anything synchronously.
  */
 export function useMultisig(address: Address | undefined) {
   const [entry, setEntry] = useState<Entry>(EMPTY);
   const [failure, setFailure] = useState<{ key?: Address; error: unknown } | null>(null);
-  // Ответы приходят в произвольном порядке — устаревший не должен перетереть свежий.
+  // Responses arrive in arbitrary order — a stale one must not overwrite a fresh one.
   const gen = useRef(0);
 
   const refresh = useCallback(async (until?: (data: Multisig) => boolean) => {
@@ -39,8 +40,8 @@ export function useMultisig(address: Address | undefined) {
     try {
       const rpc = getRpc();
       const read = () => fetchMaybeMultisig(rpc, address, { commitment: READ_COMMITMENT });
-      // «Не найден» сразу после создания — обычно отставание ноды, а не отсутствие;
-      // так же и данные, отставшие от только что отправленной записи (см. rpc-lag).
+      // "Not found" right after creation usually means a lagging node, not absence;
+      // the same goes for data lagging behind a write we just sent (see rpc-lag).
       const stale = (a: Awaited<ReturnType<typeof read>>) =>
         !a.exists || (until != null && !until(a.data));
       let acc = await read();
@@ -66,9 +67,9 @@ export function useMultisig(address: Address | undefined) {
   }, [address]);
 
   useEffect(() => {
-    // Правило считает вызов refresh() синхронным setState и не заглядывает за
-    // await внутри него. Проверено: все setState здесь стоят ПОСЛЕ await, то есть
-    // каскадного рендера, от которого правило защищает, тут нет.
+    // The lint rule treats the refresh() call as a synchronous setState and does not
+    // look past the awaits inside it. Verified: every setState here comes AFTER an
+    // await, so the cascading render the rule guards against cannot happen.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);

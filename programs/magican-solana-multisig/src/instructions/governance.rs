@@ -4,10 +4,10 @@ use crate::constants::MAX_OWNERS;
 use crate::error::ErrorCode;
 use crate::state::{assert_unique_owners, Multisig};
 
-/// Контекст управления правилами. Подписант — treasury/authority PDA (`multisig_signer`),
-/// объявленный как `Signer` с seed-констрейнтом: подписать за него может ТОЛЬКО `invoke_signed`
-/// из `execute_transaction`. Значит `set_owners`/`change_threshold` недоступны напрямую —
-/// только «сквозь голосование» (#6). Паттерн из аудированного `coral-xyz/multisig`.
+/// Context for governing the rules. The signer is the treasury/authority PDA (`multisig_signer`),
+/// declared as a `Signer` with a seed constraint: ONLY `invoke_signed` from `execute_transaction`
+/// can sign on its behalf. So `set_owners`/`change_threshold` are unreachable directly — only
+/// "through the vote" (#6). The pattern comes from the audited `coral-xyz/multisig`.
 #[derive(Accounts)]
 pub struct Auth<'info> {
     #[account(mut)]
@@ -26,15 +26,15 @@ pub fn set_owners(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
 
     let multisig = &mut ctx.accounts.multisig;
 
-    // Если владельцев стало меньше порога — клампим порог вниз (поведение аудированного
-    // эталона: безопаснее, чем оставить недостижимый threshold).
+    // If the owners now number fewer than the threshold, clamp the threshold down (behavior of
+    // the audited reference: safer than leaving an unreachable threshold).
     if (owners.len() as u8) < multisig.threshold {
         multisig.threshold = owners.len() as u8;
     }
     multisig.owners = owners;
 
-    // Инкремент версии набора владельцев инвалидирует все ранее созданные, но не
-    // исполненные предложения (#5): уволенный владелец не доисполнит старое.
+    // Incrementing the owner-set version invalidates every proposal created earlier but not
+    // yet executed (#5): a removed owner cannot push an old one through.
     multisig.owner_set_seqno = multisig
         .owner_set_seqno
         .checked_add(1)
@@ -51,11 +51,11 @@ pub fn change_threshold(ctx: Context<Auth>, threshold: u8) -> Result<()> {
     );
     multisig.threshold = threshold;
 
-    // F2 (аудит): смена порога — тоже изменение правил кворума. `execute` читает
-    // `threshold` в момент исполнения, поэтому ПОНИЖЕНИЕ порога сделало бы старое
-    // недобравшее предложение внезапно исполнимым без переодобрения под новым правилом.
-    // Бампаем `owner_set_seqno` (используем его как общую версию конфигурации), чтобы
-    // инвалидировать все pending-предложения и потребовать свежих голосов (#5).
+    // F2 (audit): changing the threshold is a change of the quorum rules too. `execute` reads
+    // `threshold` at execution time, so LOWERING the threshold would make an old proposal that
+    // never gathered enough votes suddenly executable without re-approval under the new rule.
+    // We bump `owner_set_seqno` (using it as the overall configuration version) in order to
+    // invalidate all pending proposals and demand fresh votes (#5).
     multisig.owner_set_seqno = multisig
         .owner_set_seqno
         .checked_add(1)

@@ -134,8 +134,8 @@ export type CreateMultisigAsyncInput<
   TAccountSystemProgram extends string = string,
 > = {
   /**
-   * PDA-кошелёк. `init` (не `init_if_needed`) закрывает reinit-атаку (#7).
-   * Канонический bump сохраняем в state для последующего `invoke_signed` (#8).
+   * The PDA wallet. `init` (not `init_if_needed`) closes the reinit attack (#7).
+   * The canonical bump is persisted in state for the later `invoke_signed` (#8).
    */
   multisig?: Address<TAccountMultisig>;
   creator: TransactionSigner<TAccountCreator>;
@@ -224,8 +224,8 @@ export type CreateMultisigInput<
   TAccountSystemProgram extends string = string,
 > = {
   /**
-   * PDA-кошелёк. `init` (не `init_if_needed`) закрывает reinit-атаку (#7).
-   * Канонический bump сохраняем в state для последующего `invoke_signed` (#8).
+   * The PDA wallet. `init` (not `init_if_needed`) closes the reinit attack (#7).
+   * The canonical bump is persisted in state for the later `invoke_signed` (#8).
    */
   multisig: Address<TAccountMultisig>;
   creator: TransactionSigner<TAccountCreator>;
@@ -304,8 +304,8 @@ export type ParsedCreateMultisigInstruction<
   programAddress: Address<TProgram>;
   accounts: {
     /**
-     * PDA-кошелёк. `init` (не `init_if_needed`) закрывает reinit-атаку (#7).
-     * Канонический bump сохраняем в state для последующего `invoke_signed` (#8).
+     * The PDA wallet. `init` (not `init_if_needed`) closes the reinit attack (#7).
+     * The canonical bump is persisted in state for the later `invoke_signed` (#8).
      */
     multisig: TAccountMetas[0];
     creator: TAccountMetas[1];

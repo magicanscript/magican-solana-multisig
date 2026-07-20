@@ -53,49 +53,49 @@ export function getMultisigDiscriminatorBytes(): ReadonlyUint8Array {
 
 export type Multisig = {
   discriminator: ReadonlyUint8Array;
-  /** Создатель — часть сидов PDA (нужен для `invoke_signed`). */
+  /** Creator — part of the PDA seeds (needed for `invoke_signed`). */
   creator: Address;
-  /** Пользовательский сид — часть сидов PDA (позволяет одному создателю иметь много мультисигов). */
+  /** User-supplied seed — part of the PDA seeds (lets one creator own many multisigs). */
   seed: bigint;
-  /** Список владельцев (N). */
+  /** The list of owners (N). */
   owners: Array<Address>;
-  /** Сколько подписей нужно для исполнения (M). */
+  /** How many signatures execution requires (M). */
   threshold: number;
-  /** Версия набора владельцев — инвалидирует старые предложения при смене владельцев. */
+  /** Owner-set version — invalidates old proposals when the owners change. */
   ownerSetSeqno: number;
-  /** Счётчик для деривации PDA транзакций. */
+  /** Counter used to derive transaction PDAs. */
   transactionCount: bigint;
-  /** Канонический bump самого PDA данных `Multisig`. */
+  /** Canonical bump of the `Multisig` data PDA itself. */
   bump: number;
   /**
-   * Канонический bump treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
-   * Это System-owned PDA-казна: держит средства и подписывает вложенные инструкции
-   * через `invoke_signed`. Отделён от аккаунта данных, т.к. `SystemProgram.transfer`
-   * требует System-владения source-аккаунта.
+   * Canonical bump of the treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
+   * This is a System-owned PDA treasury: it holds the funds and signs inner instructions
+   * via `invoke_signed`. It is split off from the data account because `SystemProgram.transfer`
+   * requires the source account to be System-owned.
    */
   signerBump: number;
 };
 
 export type MultisigArgs = {
-  /** Создатель — часть сидов PDA (нужен для `invoke_signed`). */
+  /** Creator — part of the PDA seeds (needed for `invoke_signed`). */
   creator: Address;
-  /** Пользовательский сид — часть сидов PDA (позволяет одному создателю иметь много мультисигов). */
+  /** User-supplied seed — part of the PDA seeds (lets one creator own many multisigs). */
   seed: number | bigint;
-  /** Список владельцев (N). */
+  /** The list of owners (N). */
   owners: Array<Address>;
-  /** Сколько подписей нужно для исполнения (M). */
+  /** How many signatures execution requires (M). */
   threshold: number;
-  /** Версия набора владельцев — инвалидирует старые предложения при смене владельцев. */
+  /** Owner-set version — invalidates old proposals when the owners change. */
   ownerSetSeqno: number;
-  /** Счётчик для деривации PDA транзакций. */
+  /** Counter used to derive transaction PDAs. */
   transactionCount: number | bigint;
-  /** Канонический bump самого PDA данных `Multisig`. */
+  /** Canonical bump of the `Multisig` data PDA itself. */
   bump: number;
   /**
-   * Канонический bump treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
-   * Это System-owned PDA-казна: держит средства и подписывает вложенные инструкции
-   * через `invoke_signed`. Отделён от аккаунта данных, т.к. `SystemProgram.transfer`
-   * требует System-владения source-аккаунта.
+   * Canonical bump of the treasury/authority PDA (`multisig_signer`, seeds = [multisig.key()]).
+   * This is a System-owned PDA treasury: it holds the funds and signs inner instructions
+   * via `invoke_signed`. It is split off from the data account because `SystemProgram.transfer`
+   * requires the source account to be System-owned.
    */
   signerBump: number;
 };

@@ -17,7 +17,7 @@ const RECIP = address("SysvarC1ock11111111111111111111111111111111");
 const SYSTEM = address("11111111111111111111111111111111");
 
 describe("buildSolTransfer", () => {
-  it("кодирует System::Transfer (u32=2, затем u64 amount LE)", () => {
+  it("encodes System::Transfer (u32=2, then the u64 amount LE)", () => {
     const { data } = buildSolTransfer(SIGNER, RECIP, 1_000_000_000n);
     expect(data.length).toBe(12);
     const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -25,7 +25,7 @@ describe("buildSolTransfer", () => {
     expect(dv.getBigUint64(4, true)).toBe(1_000_000_000n);
   });
 
-  it("treasury-PDA — подписант, получатель — только writable", () => {
+  it("the treasury PDA is the signer, the recipient is writable only", () => {
     const { proposalAccounts } = buildSolTransfer(SIGNER, RECIP, 1n);
     expect(proposalAccounts).toEqual([
       { pubkey: SIGNER, isSigner: true, isWritable: true },
@@ -33,7 +33,7 @@ describe("buildSolTransfer", () => {
     ]);
   });
 
-  it("remaining включает обе стороны и System Program последним", () => {
+  it("remaining includes both sides and the System Program last", () => {
     const { remaining } = buildSolTransfer(SIGNER, RECIP, 1n);
     expect(remaining).toEqual([
       { address: SIGNER, role: AccountRole.WRITABLE },
@@ -44,7 +44,7 @@ describe("buildSolTransfer", () => {
 });
 
 describe("buildRawNested", () => {
-  it("декодирует base64-данные в байты", () => {
+  it("decodes base64 data into bytes", () => {
     const { data } = buildRawNested({
       programId: RECIP,
       signerPda: SIGNER,
@@ -54,10 +54,10 @@ describe("buildRawNested", () => {
     expect(Array.from(data)).toEqual([1, 2, 3]);
   });
 
-  // execute подписывает только за treasury-PDA (invoke_signed). Если пометить
-  // подписантом чужой аккаунт, предложение наберёт кворум, но исполнить его
-  // будет нельзя НИКОГДА — MissingRequiredSignature. Ловим это до создания.
-  it("отвергает подписанта, который не является treasury-PDA", () => {
+  // execute signs only for the treasury PDA (invoke_signed). If someone else's account is
+  // marked as a signer, the proposal will reach the quorum, but it will NEVER be possible
+  // to execute it — MissingRequiredSignature. We catch this before creation.
+  it("rejects a signer that is not the treasury PDA", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
@@ -65,10 +65,10 @@ describe("buildRawNested", () => {
         accounts: [{ pubkey: RECIP, isSigner: true, isWritable: true }],
         dataBase64: "",
       }),
-    ).toThrow(/подписант|signer/i);
+    ).toThrow(/signer/i);
   });
 
-  it("разрешает подписанта, если это treasury-PDA", () => {
+  it("allows a signer if it is the treasury PDA", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
@@ -79,7 +79,7 @@ describe("buildRawNested", () => {
     ).not.toThrow();
   });
 
-  it("маппит is_writable в роли и добавляет program id последним", () => {
+  it("maps is_writable to roles and adds the program id last", () => {
     const { remaining } = buildRawNested({
       programId: RECIP,
       signerPda: SIGNER,
@@ -96,7 +96,7 @@ describe("buildRawNested", () => {
     ]);
   });
 
-  it("отвергает больше MAX_TX_ACCOUNTS аккаунтов", () => {
+  it("rejects more than MAX_TX_ACCOUNTS accounts", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
@@ -108,10 +108,10 @@ describe("buildRawNested", () => {
         })),
         dataBase64: "",
       }),
-    ).toThrow(/аккаунт/i);
+    ).toThrow(/accounts/i);
   });
 
-  it("отвергает данные длиннее MAX_TX_DATA", () => {
+  it("rejects data longer than MAX_TX_DATA", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
@@ -119,14 +119,14 @@ describe("buildRawNested", () => {
         accounts: [],
         dataBase64: Buffer.alloc(MAX_TX_DATA + 1).toString("base64"),
       }),
-    ).toThrow(/данны/i);
+    ).toThrow(/data/i);
   });
 
-  // Зонд на живом декодере kit: строка длиной %4==1 декодируется БЕЗ ошибки,
-  // молча теряя хвостовой символ ("SGVsbG8hA" → те же 6 байт, что "SGVsbG8h").
-  // Блоб, обрезанный при копировании, дал бы предложение с ЧУЖИМИ данными, а
-  // выяснилось бы это на execute — где отменить уже нечем.
-  it("отвергает обрезанный base64 вместо тихой потери хвоста", () => {
+  // A probe against kit's live decoder: a string whose length is %4==1 decodes WITHOUT an
+  // error, silently losing the trailing character ("SGVsbG8hA" → the same 6 bytes as "SGVsbG8h").
+  // A blob truncated while copying would give a proposal with SOMEONE ELSE'S data, and that
+  // would surface on execute — where there is nothing left to cancel with.
+  it("rejects truncated base64 instead of silently losing the tail", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
@@ -137,20 +137,20 @@ describe("buildRawNested", () => {
     ).toThrow(/base64/i);
   });
 
-  it("отвергает не-base64", () => {
+  it("rejects non-base64", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
         signerPda: SIGNER,
         accounts: [],
-        dataBase64: "не base64!",
+        dataBase64: "not base64!",
       }),
     ).toThrow(/base64/i);
   });
 
-  // Скопированный из обозревателя блоб часто приходит с переносами строк —
-  // декодер kit на пробелах падает, а для пользователя это «валидные данные».
-  it("терпит пробелы и переносы внутри base64", () => {
+  // A blob copied from an explorer often arrives with line breaks — kit's decoder chokes
+  // on whitespace, while for the user this is "valid data".
+  it("tolerates spaces and line breaks inside base64", () => {
     const { data } = buildRawNested({
       programId: RECIP,
       signerPda: SIGNER,
@@ -160,7 +160,7 @@ describe("buildRawNested", () => {
     expect(Array.from(data)).toEqual([...Buffer.from("Hello!")]);
   });
 
-  it("принимает ровно граничные значения лимитов", () => {
+  it("accepts exactly the boundary values of the limits", () => {
     expect(() =>
       buildRawNested({
         programId: RECIP,
@@ -177,9 +177,9 @@ describe("buildRawNested", () => {
 });
 
 describe("remainingFromProposal", () => {
-  // execute восстанавливает remaining из того, что реально лежит on-chain,
-  // а не из формы: предложение мог создать кто угодно и чем угодно.
-  it("маппит is_writable в роли и добавляет program id последним", () => {
+  // execute restores remaining from what actually lies on-chain, not from the form:
+  // the proposal could have been created by anyone with anything.
+  it("maps is_writable to roles and adds the program id last", () => {
     expect(
       remainingFromProposal({
         programId: RECIP,
@@ -195,18 +195,18 @@ describe("remainingFromProposal", () => {
     ]);
   });
 
-  // Ключевой инвариант: execute SOL-предложения, восстановленный из on-chain
-  // данных, обязан совпасть с тем, что посчитал buildSolTransfer при создании.
-  it("для SOL-перевода даёт то же, что buildSolTransfer.remaining", () => {
+  // The key invariant: the execute of a SOL proposal, restored from on-chain data,
+  // must match what buildSolTransfer computed at creation time.
+  it("for a SOL transfer yields the same as buildSolTransfer.remaining", () => {
     const built = buildSolTransfer(SIGNER, RECIP, 5n);
     expect(
       remainingFromProposal({ programId: SYSTEM, accounts: built.proposalAccounts }),
     ).toEqual(built.remaining);
   });
 
-  // Подпись за PDA даёт invoke_signed внутри программы; на внешнем уровне
-  // signer-привилегия не нужна и не запрашивается (не поднимаем роль).
-  it("не поднимает роль до signer даже для аккаунтов с is_signer", () => {
+  // invoke_signed inside the program provides the signature for the PDA; at the outer
+  // level the signer privilege is not needed and not requested (we don't raise the role).
+  it("does not raise the role to signer even for accounts with is_signer", () => {
     const [pda] = remainingFromProposal({
       programId: SYSTEM,
       accounts: [{ pubkey: SIGNER, isSigner: true, isWritable: false }],
@@ -215,13 +215,13 @@ describe("remainingFromProposal", () => {
   });
 });
 
-// Правила проверены зондом на реальном рантайме devnet (см. docs, точка Task 12):
-//   казна: остаток обязан быть либо РОВНО 0 (аккаунт удаляется), либо >= минимума;
-//          промежуток → InsufficientFundsForRent на execute;
-//   получатель: итоговый баланс >= минимума, иначе InsufficientFundsForRent.
+// The rules were verified by a probe against the real devnet runtime (see docs, Task 12 point):
+//   treasury: the remainder must be either EXACTLY 0 (the account is deleted) or >= the minimum;
+//             anything in between → InsufficientFundsForRent on execute;
+//   recipient: the resulting balance >= the minimum, otherwise InsufficientFundsForRent.
 describe("maxTransferLamports", () => {
-  // Слив в ноль рантайм разрешает (post = Uninitialized), поэтому MAX — весь баланс.
-  it("даёт весь баланс казны: полный вывод разрешён", () => {
+  // The runtime allows draining to zero (post = Uninitialized), so MAX is the whole balance.
+  it("yields the whole treasury balance: a full withdrawal is allowed", () => {
     expect(maxTransferLamports(2_000_000_000n)).toBe(2_000_000_000n);
     expect(maxTransferLamports(RENT_EXEMPT_MIN_LAMPORTS)).toBe(RENT_EXEMPT_MIN_LAMPORTS);
     expect(maxTransferLamports(0n)).toBe(0n);
@@ -231,54 +231,54 @@ describe("maxTransferLamports", () => {
 describe("checkTreasuryRemainder", () => {
   const TREASURY = 100_000_000n;
 
-  it("полный вывод в ноль — можно", () => {
+  it("a full withdrawal to zero is fine", () => {
     expect(checkTreasuryRemainder(TREASURY, TREASURY)).toBeNull();
   });
 
-  it("остаток не меньше минимума — можно", () => {
+  it("a remainder no smaller than the minimum is fine", () => {
     expect(checkTreasuryRemainder(TREASURY, TREASURY - RENT_EXEMPT_MIN_LAMPORTS)).toBeNull();
     expect(checkTreasuryRemainder(TREASURY, 1n)).toBeNull();
   });
 
-  // Дыра между «MAX минус минимум» и «весь баланс»: рантайм такое отвергает.
-  it("остаток в запрещённом интервале — нельзя, подсказываем безопасный максимум", () => {
+  // The hole between "MAX minus the minimum" and "the whole balance": the runtime rejects that.
+  it("a remainder in the forbidden interval is not allowed, we hint the safe maximum", () => {
     const issue = checkTreasuryRemainder(TREASURY, TREASURY - 500_000n);
     expect(issue).toEqual({ kind: "remainder", safeMax: TREASURY - RENT_EXEMPT_MIN_LAMPORTS });
     expect(checkTreasuryRemainder(TREASURY, TREASURY - RENT_EXEMPT_MIN_LAMPORTS + 1n)).not.toBeNull();
   });
 
-  it("сумма больше баланса казны — это не про ренту, здесь не ошибка", () => {
+  it("an amount larger than the treasury balance is not about rent, no error here", () => {
     expect(checkTreasuryRemainder(TREASURY, TREASURY + 1n)).toBeNull();
   });
 });
 
 describe("checkRecipientRent", () => {
-  // Главный капкан: падает на execute, когда подписи уже собраны, а отменить
-  // предложение нечем — в программе нет ни cancel, ни close.
-  it("пыль на пустой адрес — нельзя, сообщаем недостающее", () => {
+  // The main trap: it fails on execute, when the approvals are already collected and there
+  // is nothing to cancel the proposal with — the program has neither cancel nor close.
+  it("dust to an empty address is not allowed, we report what is missing", () => {
     expect(checkRecipientRent(0n, 1_000n)).toEqual({
       kind: "recipient",
       needed: RENT_EXEMPT_MIN_LAMPORTS,
     });
   });
 
-  it("ровно минимум на пустой адрес — можно", () => {
+  it("exactly the minimum to an empty address is fine", () => {
     expect(checkRecipientRent(0n, RENT_EXEMPT_MIN_LAMPORTS)).toBeNull();
   });
 
-  it("получателю хватает своего баланса — любая сумма можно", () => {
+  it("the recipient's own balance is enough — any amount is fine", () => {
     expect(checkRecipientRent(RENT_EXEMPT_MIN_LAMPORTS, 1n)).toBeNull();
     expect(checkRecipientRent(500_000_000n, 1_000n)).toBeNull();
   });
 
-  it("баланс получателя добивается переводом до минимума", () => {
+  it("the recipient's balance is topped up to the minimum by the transfer", () => {
     expect(checkRecipientRent(890_000n, 880n)).toBeNull();
     expect(checkRecipientRent(890_000n, 879n)).not.toBeNull();
   });
 });
 
 describe("appendRemaining", () => {
-  it("дописывает remaining-аккаунты в хвост существующих", () => {
+  it("appends the remaining accounts after the existing ones", () => {
     const execIx = {
       programAddress: RECIP,
       accounts: [{ address: SIGNER, role: AccountRole.READONLY }],

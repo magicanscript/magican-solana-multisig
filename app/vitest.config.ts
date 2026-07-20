@@ -2,10 +2,10 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// Vitest не читает paths из tsconfig — дублируем алиасы явно.
+// Vitest doesn't read paths from tsconfig — we duplicate the aliases explicitly.
 export default defineConfig({
-  // JSX в тестах компонентов: tsconfig Next'а держит `jsx: "preserve"` (транспиляция —
-  // забота сборщика), поэтому esbuild сам по себе .tsx-тест не соберёт.
+  // JSX in component tests: Next's tsconfig keeps `jsx: "preserve"` (transpilation is
+  // the bundler's job), so esbuild on its own won't build a .tsx test.
   plugins: [react()],
   resolve: {
     alias: {
@@ -14,8 +14,8 @@ export default defineConfig({
     },
   },
   test: {
-    // По умолчанию node — он быстрее и честнее для чистых модулей. Тесты компонентов
-    // просят jsdom построчно: `// @vitest-environment jsdom` в первой строке файла.
+    // node by default — it's faster and more honest for pure modules. Component tests
+    // ask for jsdom per file: `// @vitest-environment jsdom` on the first line of the file.
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],

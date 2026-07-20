@@ -8,21 +8,21 @@ import { RPC_LAG_DELAY_MS, RPC_LAG_RETRIES, sleep } from '@/lib/rpc-lag';
 const EMPTY: ProposalView[] = [];
 
 /**
- * Предложения (Transaction PDA) конкретного мультисига.
- * `refresh` вызывать после approve/execute, чтобы подтянуть новые маски голосов.
- * Ему можно передать `until` — признак того, что запись уже видна (новое
- * предложение в списке, поднявшаяся маска): пока признака нет, читаем повторно,
- * иначе отставшая нода отдаёт прежний список и голос выглядит потерянным.
+ * Proposals (Transaction PDAs) of a particular multisig.
+ * Call `refresh` after approve/execute to pull in the new approval masks. It accepts
+ * an `until` predicate — a sign that the write is already visible (a new proposal in
+ * the list, a grown mask): while the sign is absent we read again, otherwise a
+ * lagging node returns the previous list and the vote looks lost.
  *
- * Состояние привязано к адресу, для которого получено: чужой список под новым
- * адресом не отдаётся, а `loading` — производное («данных под текущий адрес ещё
- * нет»), поэтому эффекту не нужно ничего синхронно сбрасывать. Побочный плюс:
- * ручной `refresh()` после approve не мигает скелетоном.
+ * State is bound to the address it was fetched for: a list belonging to another
+ * address is never handed out, and `loading` is derived ("there is no data for the
+ * current address yet"), so the effect needs no synchronous reset. Side benefit: a
+ * manual `refresh()` after approve does not flash the skeleton.
  */
 export function useProposals(address: Address | undefined) {
   const [entry, setEntry] = useState<{ key?: Address; items: ProposalView[] }>({ items: EMPTY });
   const [failure, setFailure] = useState<{ key?: Address; error: unknown } | null>(null);
-  // Ответы приходят в произвольном порядке — устаревший не должен перетереть свежий.
+  // Responses arrive in arbitrary order — a stale one must not overwrite a fresh one.
   const gen = useRef(0);
 
   const refresh = useCallback(async (until?: (items: ProposalView[]) => boolean) => {
@@ -45,9 +45,9 @@ export function useProposals(address: Address | undefined) {
   }, [address]);
 
   useEffect(() => {
-    // Правило считает вызов refresh() синхронным setState и не заглядывает за
-    // await внутри него. Проверено: все setState здесь стоят ПОСЛЕ await, то есть
-    // каскадного рендера, от которого правило защищает, тут нет.
+    // The lint rule treats the refresh() call as a synchronous setState and does not
+    // look past the awaits inside it. Verified: every setState here comes AFTER an
+    // await, so the cascading render the rule guards against cannot happen.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);

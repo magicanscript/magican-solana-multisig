@@ -9,24 +9,24 @@ import { ApprovalPips } from './ApprovalPips';
 
 const STATUS_META: Record<ProposalStatus, { label: string; cls: string }> = {
   executed: {
-    label: 'Исполнено',
+    label: 'Executed',
     cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
   },
   executable: {
-    label: 'Готово к исполнению',
+    label: 'Ready to execute',
     cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
   },
   pending: {
-    label: 'Ждёт подписей',
+    label: 'Awaiting signatures',
     cls: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
   },
   stale: {
-    label: 'Устарело',
+    label: 'Outdated',
     cls: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
   },
 };
 
-/** Строка предложения: индекс, кворум, статус, пипсы одобрений, действия. */
+/** A proposal row: index, quorum, status, approval pips, actions. */
 export function ProposalRow({
   view,
   ms,
@@ -41,9 +41,9 @@ export function ProposalRow({
   ms: MultisigView;
   index?: number;
   me?: Address;
-  /** Казна мультисига: без неё не отличить чужого подписанта от нашего (см. actionBlocks). */
+  /** The multisig treasury: without it a foreign signer can't be told from ours (see actionBlocks). */
   signerPda?: Address;
-  /** Другое действие уже в работе: диалог открыт или транзакция летит. */
+  /** Another action is already in flight: a dialog is open or a transaction is on its way. */
   busy?: boolean;
   onApprove: (view: ProposalView) => void;
   onExecute: (view: ProposalView) => void;
@@ -57,16 +57,16 @@ export function ProposalRow({
   const approvals = countApprovals(tx.signers);
   const meta = STATUS_META[status];
 
-  // Маска заморожена на своём наборе владельцев: сравнивать её с ТЕКУЩИМ порогом
-  // можно только пока набор не менялся, иначе «2 / 2» читалось бы как «кворум
-  // набран» у заведомо мёртвого предложения.
+  // The mask is frozen against its own owner set: comparing it with the CURRENT
+  // threshold is only valid while the set hasn't changed, otherwise "2 / 2" would read
+  // as "quorum reached" on a proposal that is already dead.
   const comparable = isAttributable({ ownerSetSeqno: tx.ownerSetSeqno }, { ownerSetSeqno: m.ownerSetSeqno });
 
   const owners = m.owners as Address[];
   const blocks = actionBlocks(tx, m, me, busy, signerPda);
   const { approve: approveBlock, execute: executeBlock } = blocks;
-  // Почему кнопки серые — из tooltip'а на disabled-кнопке не узнать (на тач-устройствах
-  // его нет вовсе). Правила показа — в actionHint.
+  // Why the buttons are greyed out can't be learned from a tooltip on a disabled button
+  // (on touch devices there is none at all). The display rules live in actionHint.
   const hint = actionHint(blocks);
 
   return (
@@ -88,7 +88,7 @@ export function ProposalRow({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            {comparable ? `${approvals} / ${m.threshold}` : `${approvals} ${approvals === 1 ? 'голос' : 'голосов'} по прежним правилам`}
+            {comparable ? `${approvals} / ${m.threshold}` : `${approvals} ${approvals === 1 ? 'approval' : 'approvals'} under the previous rules`}
           </span>
           <ApprovalPips
             signers={tx.signers}
@@ -107,7 +107,7 @@ export function ProposalRow({
             title={approveBlock ?? undefined}
             className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            Одобрить
+            Approve
           </button>
           <button
             type="button"
@@ -116,7 +116,7 @@ export function ProposalRow({
             title={executeBlock ?? undefined}
             className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Исполнить
+            Execute
           </button>
         </div>
       </div>

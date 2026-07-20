@@ -24,10 +24,10 @@ export default function CreatePage() {
             href="/"
             className="text-sm text-zinc-500 transition-colors hover:text-indigo-600 dark:text-zinc-400"
           >
-            ← К дашборду
+            ← Back to dashboard
           </Link>
           <h1 className="mt-2 text-2xl font-semibold text-black dark:text-white">
-            Новый мультисиг
+            New multisig
           </h1>
         </div>
 
@@ -36,7 +36,7 @@ export default function CreatePage() {
         ) : !connected || !wallet ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-zinc-300 py-16 text-center dark:border-zinc-700">
             <p className="text-zinc-500 dark:text-zinc-400">
-              Подключите кошелёк, чтобы создать мультисиг.
+              Connect your wallet to create a multisig.
             </p>
             <WalletButton />
           </div>

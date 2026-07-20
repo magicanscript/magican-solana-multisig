@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch cancels the previous run: no point finishing a stale one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  program:
+    name: Program (build-sbf + LiteSVM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # We deliberately do NOT install the Anchor CLI: the tests pull in a prebuilt .so via
+      # include_bytes!, and cargo-build-sbf from the Solana CLI is enough to build it.
+      # Verified locally: build-sbf + cargo test give the same 22 green tests
+      # as a full `anchor build`. Saves a few minutes and one dependency.
+      - name: Install the Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v4.0.2/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      # The Rust version comes from rust-toolchain.toml (1.89.0) — rustup reads it itself.
+      - name: Cache cargo and platform-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/solana
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Build the program (SBF)
+        run: cargo build-sbf --manifest-path programs/magican-solana-multisig/Cargo.toml
+
+      - name: Program tests
+        run: cargo test -p magican-solana-multisig
+
+  frontend:
+    name: Frontend (types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # next 16 requires >= 20.9
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint src e2e
+
+      - name: Tests (modules + components)
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+
+      # E2E (app/e2e) deliberately do NOT run in CI: they go to the real devnet and
+      # spend SOL from real keys, which the runner doesn't have and shouldn't have.
+      # They are run manually: npm run dev, then npx playwright test.

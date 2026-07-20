@@ -2,90 +2,90 @@ import { describe, it, expect } from "vitest";
 import { lamportsToSol, pluralOwners, shortAddress, solToLamports } from "./format";
 
 describe("pluralOwners", () => {
-  it("склоняет по правилам русского, а не по !== 1", () => {
-    expect(pluralOwners(1)).toBe("владелец");
-    expect(pluralOwners(2)).toBe("владельца");
-    expect(pluralOwners(4)).toBe("владельца");
-    expect(pluralOwners(5)).toBe("владельцев");
-    expect(pluralOwners(10)).toBe("владельцев");
+  it("uses the singular only for exactly one", () => {
+    expect(pluralOwners(1)).toBe("owner");
+    expect(pluralOwners(2)).toBe("owners");
+    expect(pluralOwners(4)).toBe("owners");
+    expect(pluralOwners(5)).toBe("owners");
+    expect(pluralOwners(10)).toBe("owners");
   });
 
-  it("держит подлые случаи: 11-14 и хвосты", () => {
-    expect(pluralOwners(11)).toBe("владельцев");
-    expect(pluralOwners(12)).toBe("владельцев");
-    expect(pluralOwners(14)).toBe("владельцев");
-    expect(pluralOwners(21)).toBe("владелец");
-    expect(pluralOwners(22)).toBe("владельца");
-    expect(pluralOwners(0)).toBe("владельцев");
+  it("holds the edge cases: teens and tails", () => {
+    expect(pluralOwners(11)).toBe("owners");
+    expect(pluralOwners(12)).toBe("owners");
+    expect(pluralOwners(14)).toBe("owners");
+    expect(pluralOwners(21)).toBe("owners");
+    expect(pluralOwners(22)).toBe("owners");
+    expect(pluralOwners(0)).toBe("owners");
   });
 });
 
 describe("solToLamports", () => {
-  it("переводит целые и дробные SOL в лампорты", () => {
+  it("converts whole and fractional SOL into lamports", () => {
     expect(solToLamports("1")).toBe(1_000_000_000n);
     expect(solToLamports("0.1")).toBe(100_000_000n);
     expect(solToLamports("0")).toBe(0n);
     expect(solToLamports("2.5")).toBe(2_500_000_000n);
   });
 
-  it("держит точность до лампорта (там, где float уже врёт)", () => {
+  it("holds precision down to a lamport (where a float already lies)", () => {
     expect(solToLamports("0.000000001")).toBe(1n);
-    // 1.109120 SOL = баланс 2 SOL минус rent-exempt минимум: типичный результат «MAX».
+    // 1.109120 SOL = a balance of 2 SOL minus the rent-exempt minimum: a typical "MAX" result.
     expect(solToLamports("1.10912")).toBe(1_109_120_000n);
   });
 
-  it("допускает форму без ведущего/хвостового нуля", () => {
+  it("accepts the form without a leading/trailing zero", () => {
     expect(solToLamports("1.")).toBe(1_000_000_000n);
     expect(solToLamports(".5")).toBe(500_000_000n);
   });
 
-  it("игнорирует окружающие пробелы", () => {
+  it("ignores surrounding whitespace", () => {
     expect(solToLamports("  0.25  ")).toBe(250_000_000n);
   });
 
-  it("отвергает не-числа, отрицательные и пустую строку", () => {
+  it("rejects non-numbers, negatives and an empty string", () => {
     for (const bad of ["", "  ", "abc", "-1", "1,5", "1e9", "1.2.3", "."]) {
-      expect(() => solToLamports(bad), bad).toThrow(/сумм|числ/i);
+      expect(() => solToLamports(bad), bad).toThrow(/amount|number/i);
     }
   });
 
-  // Дробнее лампорта — не ошибка пользователя, а невыразимая величина: молча
-  // округлять нельзя, иначе «MAX» отправит не то, что показано.
-  it("отвергает больше 9 знаков после точки", () => {
-    expect(() => solToLamports("0.0000000001")).toThrow(/9|лампорт/i);
+  // Finer than a lamport is not a user mistake but an inexpressible value: silently rounding
+  // is not allowed, otherwise "MAX" would send something other than what is displayed.
+  it("rejects more than 9 digits after the point", () => {
+    expect(() => solToLamports("0.0000000001")).toThrow(/9|lamport/i);
   });
 
-  // setBigUint64 оборачивает по модулю 2^64 БЕЗ исключения: 18446744074 SOL уехали
-  // бы on-chain как 0.29 SOL. Ловим границу здесь, до кодировщика.
-  it("отвергает суммы больше u64", () => {
+  // setBigUint64 wraps modulo 2^64 WITHOUT an exception: 18446744074 SOL would have gone
+  // on-chain as 0.29 SOL. We catch the boundary here, before the encoder.
+  it("rejects amounts larger than u64", () => {
     const u64Max = 18_446_744_073_709_551_615n;
     expect(solToLamports("18446744073.709551615")).toBe(u64Max);
-    expect(() => solToLamports("18446744073.709551616")).toThrow(/велик/i);
-    expect(() => solToLamports("18446744074")).toThrow(/велик/i);
-    expect(() => solToLamports("20000000000")).toThrow(/велик/i);
+    expect(() => solToLamports("18446744073.709551616")).toThrow(/too large/i);
+    expect(() => solToLamports("18446744074")).toThrow(/too large/i);
+    expect(() => solToLamports("20000000000")).toThrow(/too large/i);
   });
 });
 
 describe("lamportsToSol", () => {
-  it("округляет вниз и обрезает хвостовые нули", () => {
+  it("rounds down and trims the trailing zeros", () => {
     expect(lamportsToSol(1_000_000_000n)).toBe("1");
     expect(lamportsToSol(1_500_000_000n)).toBe("1.5");
     expect(lamportsToSol(0n)).toBe("0");
   });
 
-  // Обратный путь «MAX»: показанное в поле должно парситься назад без потерь.
-  it("round-trip с solToLamports при полной точности", () => {
+  // The reverse path of "MAX": what is shown in the field must parse back without losses.
+  it("round-trips with solToLamports at full precision", () => {
     const lamports = 2_000_000_000n - 890_880n;
     expect(solToLamports(lamportsToSol(lamports, 9))).toBe(lamports);
   });
 
-  it("сохраняет ведущие нули в дробной части", () => {
+  it("keeps the leading zeros in the fractional part", () => {
     expect(lamportsToSol(1_000_000n)).toBe("0.001");
     expect(lamportsToSol(10n, 9)).toBe("0.00000001");
   });
 
-  // Знак делимого у BigInt-остатка ломал вёрстку строки: получалось "0.0-1".
-  it("корректно показывает отрицательные, а не мусор в середине строки", () => {
+  // The dividend's sign on a BigInt remainder broke the layout of the string: it came out as "0.0-1".
+  it("shows negatives correctly, not as junk in the middle of the string", () => {
     expect(lamportsToSol(-1_500_000_000n)).toBe("-1.5");
     expect(lamportsToSol(-1_000_000n)).toBe("-0.001");
     expect(lamportsToSol(-1n, 9)).toBe("-0.000000001");
@@ -93,7 +93,7 @@ describe("lamportsToSol", () => {
 });
 
 describe("shortAddress", () => {
-  it("сокращает длинный адрес и не трогает короткий", () => {
+  it("shortens a long address and leaves a short one alone", () => {
     expect(shortAddress("11111111111111111111111111111111")).toBe("1111…1111");
     expect(shortAddress("abc")).toBe("abc");
   });

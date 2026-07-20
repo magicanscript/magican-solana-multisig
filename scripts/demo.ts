@@ -1,14 +1,14 @@
 /**
- * End-to-end демо мультисига на @solana/kit через сгенерированный Codama-клиент.
+ * End-to-end multisig demo on @solana/kit via the generated Codama client.
  *
- * Гоняется против локального solana-test-validator (см. scripts/run-demo.sh),
- * но тот же код работает и на devnet — достаточно сменить RPC_URL/WS_URL.
+ * It runs against a local solana-test-validator (see scripts/run-demo.sh),
+ * but the same code works on devnet too — just change RPC_URL/WS_URL.
  *
- * Сценарии:
- *   1. Happy-path 2-из-3: create → propose (SOL-перевод из PDA-казны) → approve → execute.
- *   2. Негатив M-1: при недостатке подписей execute падает с NotEnoughSigners.
+ * Scenarios:
+ *   1. Happy path 2-of-3: create → propose (SOL transfer from the treasury PDA) → approve → execute.
+ *   2. Negative M-1: with not enough approvals, execute fails with NotEnoughSigners.
  *
- * Запуск: yarn demo   (или tsx scripts/demo.ts)
+ * Run: yarn demo   (or tsx scripts/demo.ts)
  */
 import {
   AccountRole,
@@ -60,7 +60,7 @@ type Rpcs = {
   rpcSubscriptions: RpcSubscriptions<SolanaRpcSubscriptionsApi>;
 };
 
-// --- Инфраструктура отправки транзакций ---
+// --- Transaction sending infrastructure ---
 
 async function sendIxs(
   { rpc, rpcSubscriptions }: Rpcs,
@@ -80,8 +80,8 @@ async function sendIxs(
   return getSignatureFromTransaction(signed);
 }
 
-// PDA предложения: seeds = [b"transaction", multisig, index_le]. Codama не генерит
-// финдер (сид зависит от on-chain поля transaction_count), поэтому деривируем вручную.
+// Proposal PDA: seeds = [b"transaction", multisig, index_le]. Codama doesn't generate
+// a finder (the seed depends on the on-chain transaction_count field), so we derive it manually.
 async function deriveTransactionPda(multisig: Address, index: bigint): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: MAGICAN_SOLANA_MULTISIG_PROGRAM_ADDRESS,
@@ -94,23 +94,23 @@ async function deriveTransactionPda(multisig: Address, index: bigint): Promise<A
   return pda;
 }
 
-// Вложенная инструкция = System-перевод SOL из PDA-казны получателю.
-// Возвращает (accounts для предложения, data, remaining для execute).
+// The nested instruction = a System SOL transfer from the treasury PDA to the recipient.
+// Returns (accounts for the proposal, data, remaining for execute).
 function buildSolTransfer(signerPda: Address, recipient: Address, amount: bigint) {
   const data = new Uint8Array(12);
   const dv = new DataView(data.buffer);
-  dv.setUint32(0, 2, true); // индекс инструкции System::Transfer
+  dv.setUint32(0, 2, true); // System::Transfer instruction index
   dv.setBigUint64(4, amount, true);
 
-  // Метаданные, которые уйдут в state предложения (is_signer=true у казны —
-  // программа подпишет за неё через invoke_signed).
+  // Metadata that goes into the proposal state (is_signer=true for the treasury —
+  // the program signs for it via invoke_signed).
   const proposalAccounts = [
     { pubkey: signerPda, isSigner: true, isWritable: true },
     { pubkey: recipient, isSigner: false, isWritable: true },
   ];
 
-  // remaining для execute: те же аккаунты (казна БЕЗ signer на внешнем уровне) плюс
-  // сама целевая программа. invoke_signed внутри программы получает именно этот срез.
+  // remaining for execute: the same accounts (the treasury WITHOUT signer at the outer level)
+  // plus the target program itself. invoke_signed inside the program gets exactly this slice.
   const remaining = [
     { address: signerPda, role: AccountRole.WRITABLE },
     { address: recipient, role: AccountRole.WRITABLE },
@@ -139,10 +139,10 @@ async function balance(rpcs: Rpcs, addr: Address): Promise<bigint> {
   return value;
 }
 
-// --- Сценарий 1: успешный 2-из-3 перевод ---
+// --- Scenario 1: a successful 2-of-3 transfer ---
 
 async function happyPath(rpcs: Rpcs) {
-  console.log('\n=== Сценарий 1: happy-path 2-из-3 ===');
+  console.log('\n=== Scenario 1: happy path 2-of-3 ===');
   const creator = await generateKeyPairSigner();
   const owner2 = await generateKeyPairSigner();
   const owner3 = await generateKeyPairSigner();
@@ -155,14 +155,14 @@ async function happyPath(rpcs: Rpcs) {
   console.log(`  multisig:      ${multisig}`);
   console.log(`  treasury PDA:  ${signerPda}`);
 
-  // Пополняем казну.
+  // Fund the treasury.
   await airdrop({ recipientAddress: signerPda, lamports: lamports(2n * LAMPORTS_PER_SOL), commitment: 'confirmed' });
 
   const recipient = (await generateKeyPairSigner()).address;
   const amount = 1n * LAMPORTS_PER_SOL;
   const { proposalAccounts, data, remaining } = buildSolTransfer(signerPda, recipient, amount);
 
-  // Propose (index 0). Proposer=creator получает автоголос.
+  // Propose (index 0). Proposer=creator gets an automatic approval.
   const txPda = await deriveTransactionPda(multisig, 0n);
   const proposeIx = getCreateTransactionInstruction({
     multisig,
@@ -173,12 +173,12 @@ async function happyPath(rpcs: Rpcs) {
     data,
   });
   await sendIxs(rpcs, creator, [proposeIx]);
-  console.log('  propose:       ok (creator автоголос → 1/2)');
+  console.log('  propose:       ok (creator auto-approval → 1/2)');
 
-  // Approve вторым владельцем → 2/2.
+  // Approve by the second owner → 2/2.
   const approveIx = getApproveInstruction({ multisig, transaction: txPda, owner: owner2 });
   await sendIxs(rpcs, owner2, [approveIx]);
-  console.log('  approve o2:    ok (2/2, кворум набран)');
+  console.log('  approve o2:    ok (2/2, quorum reached)');
 
   // Execute.
   const execIx = await getExecuteTransactionInstructionAsync({ multisig, transaction: txPda });
@@ -189,19 +189,19 @@ async function happyPath(rpcs: Rpcs) {
   const before = await balance(rpcs, recipient);
   await sendIxs(rpcs, creator, [execWithRemaining]);
   const after = await balance(rpcs, recipient);
-  console.log(`  execute:       ok, баланс получателя ${before} → ${after} lamports`);
+  console.log(`  execute:       ok, recipient balance ${before} → ${after} lamports`);
 
   if (after - before !== amount) {
-    throw new Error(`ожидался прирост ${amount}, получено ${after - before}`);
+    throw new Error(`expected an increase of ${amount}, got ${after - before}`);
   }
   const ms = await fetchMultisig(rpcs.rpc, multisig);
   console.log(`  ✔ threshold=${ms.data.threshold}, owner_set_seqno=${ms.data.ownerSetSeqno}, tx_count=${ms.data.transactionCount}`);
 }
 
-// --- Сценарий 2: недостаток подписей (M-1) ---
+// --- Scenario 2: not enough approvals (M-1) ---
 
 async function insufficientSigners(rpcs: Rpcs) {
-  console.log('\n=== Сценарий 2: негатив M-1 (execute при 1/2) ===');
+  console.log('\n=== Scenario 2: negative M-1 (execute at 1/2) ===');
   const creator = await generateKeyPairSigner();
   const owner2 = await generateKeyPairSigner();
   const owner3 = await generateKeyPairSigner();
@@ -225,7 +225,7 @@ async function insufficientSigners(rpcs: Rpcs) {
     data,
   });
   await sendIxs(rpcs, creator, [proposeIx]);
-  console.log('  propose:       ok (только 1/2 — creator, второго approve НЕТ)');
+  console.log('  propose:       ok (only 1/2 — the creator, there is NO second approve)');
 
   const execIx = await getExecuteTransactionInstructionAsync({ multisig, transaction: txPda });
   const execWithRemaining: Instruction = {
@@ -235,31 +235,31 @@ async function insufficientSigners(rpcs: Rpcs) {
 
   try {
     await sendIxs(rpcs, creator, [execWithRemaining]);
-    throw new Error('ОШИБКА: execute прошёл при недостатке подписей — это баг!');
+    throw new Error('ERROR: execute went through without enough approvals — that is a bug!');
   } catch (e) {
     const msg = String((e as Error).message ?? e) + JSON.stringify(e, Object.getOwnPropertyNames(e));
     const isExpected = msg.includes('6005') || msg.toLowerCase().includes('notenoughsigners') || msg.includes('0x1775');
     if (!isExpected) {
-      console.log('  (диагностика) неожиданная ошибка:', msg.slice(0, 400));
+      console.log('  (diagnostics) unexpected error:', msg.slice(0, 400));
       throw e;
     }
-    console.log('  ✔ execute отклонён: NotEnoughSigners (код 6005 / 0x1775) — как и должно быть');
+    console.log('  ✔ execute rejected: NotEnoughSigners (code 6005 / 0x1775) — exactly as it should be');
   }
 }
 
 async function main() {
   console.log(`RPC: ${RPC_URL}`);
-  console.log(`Программа: ${MAGICAN_SOLANA_MULTISIG_PROGRAM_ADDRESS}`);
+  console.log(`Program: ${MAGICAN_SOLANA_MULTISIG_PROGRAM_ADDRESS}`);
   const rpcs: Rpcs = {
     rpc: createSolanaRpc(RPC_URL),
     rpcSubscriptions: createSolanaRpcSubscriptions(WS_URL),
   };
   await happyPath(rpcs);
   await insufficientSigners(rpcs);
-  console.log('\n✔ Оба сценария отработали ожидаемо.');
+  console.log('\n✔ Both scenarios behaved as expected.');
 }
 
 main().catch((e) => {
-  console.error('\n[FAIL] Демо упало:', e);
+  console.error('\n[FAIL] The demo crashed:', e);
   process.exit(1);
 });

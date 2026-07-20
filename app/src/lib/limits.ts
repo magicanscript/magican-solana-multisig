@@ -1,6 +1,6 @@
-// Зеркало on-chain констант из programs/magican-solana-multisig/src/constants.rs.
-// Держим в одном месте: клиентская валидация и тексты ошибок не должны расходиться
-// с программой при изменении лимитов.
+// A mirror of the on-chain constants from programs/magican-solana-multisig/src/constants.rs.
+// Kept in one place: the client-side validation and the error texts must not drift apart
+// from the program when the limits change.
 export const MAX_OWNERS = 10;
 export const MAX_TX_ACCOUNTS = 16;
 export const MAX_TX_DATA = 1024;

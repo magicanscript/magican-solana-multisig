@@ -15,7 +15,7 @@ declare_id!("EKYNZ8yeiivzgpmbq5TxC5bphmRnfARLxgzMxDUhHEUG");
 pub mod magican_solana_multisig {
     use super::*;
 
-    /// Создаёт PDA-мультисиг. `1 <= threshold <= owners.len()`, без дубликатов, N <= MAX_OWNERS.
+    /// Creates a PDA multisig. `1 <= threshold <= owners.len()`, no duplicates, N <= MAX_OWNERS.
     pub fn create_multisig(
         ctx: Context<CreateMultisig>,
         owners: Vec<Pubkey>,
@@ -25,8 +25,8 @@ pub mod magican_solana_multisig {
         create_multisig::handler(ctx, owners, threshold, seed)
     }
 
-    /// Создаёт предложение (одна вложенная инструкция) и ставит автоголос proposer'а.
-    /// Вызывать может только владелец.
+    /// Creates a proposal (a single inner instruction) and casts the proposer's auto-vote.
+    /// Only an owner may call it.
     pub fn create_transaction(
         ctx: Context<CreateTransaction>,
         program_id: Pubkey,
@@ -36,24 +36,24 @@ pub mod magican_solana_multisig {
         create_transaction::handler(ctx, program_id, accounts, data)
     }
 
-    /// Ставит голос владельца за предложение (идемпотентно).
+    /// Casts an owner's vote for a proposal (idempotent).
     pub fn approve(ctx: Context<Approve>) -> Result<()> {
         approve::handler(ctx)
     }
 
-    /// Исполняет предложение через `invoke_signed`, если одобрений >= threshold.
-    /// Целевые аккаунты и программа передаются как remaining_accounts.
+    /// Executes a proposal via `invoke_signed` once approvals >= threshold.
+    /// The target accounts and program are passed as remaining_accounts.
     pub fn execute_transaction(ctx: Context<ExecuteTransaction>) -> Result<()> {
         execute_transaction::handler(ctx)
     }
 
-    /// Меняет набор владельцев и инкрементирует `owner_set_seqno`.
-    /// Доступно только через self-CPI из `execute_transaction` (см. `Auth`).
+    /// Changes the owner set and increments `owner_set_seqno`.
+    /// Reachable only through a self-CPI from `execute_transaction` (see `Auth`).
     pub fn set_owners(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
         governance::set_owners(ctx, owners)
     }
 
-    /// Меняет порог. Доступно только через self-CPI из `execute_transaction`.
+    /// Changes the threshold. Reachable only through a self-CPI from `execute_transaction`.
     pub fn change_threshold(ctx: Context<Auth>, threshold: u8) -> Result<()> {
         governance::change_threshold(ctx, threshold)
     }

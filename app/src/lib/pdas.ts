@@ -13,8 +13,8 @@ export const deriveMultisigPda = async (creator: Address, seed: bigint): Promise
 export const deriveSignerPda = async (multisig: Address): Promise<Address> =>
   (await findMultisigSignerPda({ multisig }))[0];
 
-// У transaction-PDA нет сгенерированного финдера — деривируем вручную
-// по сидам программы: [b"transaction", multisig, index_le].
+// The transaction PDA has no generated finder — we derive it by hand
+// from the program's seeds: [b"transaction", multisig, index_le].
 export async function deriveTransactionPda(multisig: Address, index: bigint): Promise<Address> {
   const [pda] = await getProgramDerivedAddress({
     programAddress: PROGRAM_ID,
