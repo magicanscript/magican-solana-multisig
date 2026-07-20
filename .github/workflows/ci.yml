@@ -62,6 +62,21 @@ jobs:
 
       - run: npm ci
 
+      # The generated client lives in clients/js, which declares @solana/kit only as a
+      # peerDependency and has no node_modules of its own. Node resolves upwards from the
+      # file, so those imports are only satisfied by the root node_modules — app/node_modules
+      # is not on that path. Without this step tsc and next build fail with TS2307 /
+      # module-not-found on every clients/js/src/generated/* file.
+      - name: Cache the root node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+
+      - name: Install the root dependencies (for clients/js)
+        working-directory: .
+        run: yarn install --frozen-lockfile
+
       - name: Types
         run: npx tsc --noEmit
 
