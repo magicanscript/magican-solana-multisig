@@ -50,8 +50,17 @@ export function ApprovalPips({
   return (
     <div className="flex items-center gap-1">
       {pips.map(({ owner, approved }) => (
+        // Голос закодирован цветом — для скринридера и для теста этого нет вовсе.
+        // `role="img"` + подпись делают состояние читаемым, `data-*` — проверяемым
+        // без опоры на CSS-классы (иначе тест сторожил бы оформление, а не смысл).
         <span
           key={owner}
+          role="img"
+          aria-label={`${shortAddress(owner, 4, 4)}${me && owner === me ? ' (вы)' : ''} — ${
+            approved ? 'одобрил' : 'не одобрил'
+          }`}
+          data-approved={approved}
+          data-me={me != null && owner === me}
           title={`${shortAddress(owner, 4, 4)}${approved ? ' — одобрил' : ''}`}
           className={[
             'h-3 w-3 rounded-full border',
