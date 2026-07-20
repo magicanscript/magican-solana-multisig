@@ -5,11 +5,12 @@ import { useWalletConnection } from '@solana/react-hooks';
 import { WalletButton } from '@/components/WalletButton';
 import { MultisigCard } from '@/components/MultisigCard';
 import { useMyMultisigs } from '@/hooks/useMyMultisigs';
+import { humanizeError } from '@/lib/errors';
 
 export default function Home() {
   const { isReady, status } = useWalletConnection();
   const connected = status === 'connected';
-  const { data, loading } = useMyMultisigs();
+  const { data, loading, error, refresh } = useMyMultisigs();
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
@@ -49,6 +50,19 @@ export default function Home() {
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="h-28 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
                 ))}
+              </div>
+            ) : error ? (
+              // Отказ RPC нельзя показывать как «мультисигов нет»: владелец решит,
+              // что подписывать нечего, хотя предложение может ждать его подписи.
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-red-300 py-16 text-center dark:border-red-900">
+                <p className="text-sm text-red-600 dark:text-red-400">{humanizeError(error)}</p>
+                <button
+                  type="button"
+                  onClick={() => void refresh()}
+                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Повторить
+                </button>
               </div>
             ) : data.length === 0 ? (
               <div className="rounded-xl border border-dashed border-zinc-300 py-16 text-center text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">

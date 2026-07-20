@@ -12,7 +12,7 @@ import {
   MULTISIG_DISCRIMINATOR,
   TRANSACTION_DISCRIMINATOR,
 } from "@generated";
-import { getRpc, PROGRAM_ID } from "./solana";
+import { getRpc, PROGRAM_ID, READ_COMMITMENT } from "./solana";
 
 export type MultisigView = {
   address: Address;
@@ -50,10 +50,19 @@ export function filterOwned(all: MultisigView[], owner: Address): MultisigView[]
   return all.filter((m) => (m.data.owners as Address[]).some((o) => o === owner));
 }
 
+// Дискриминатор уже отсёк чужие типы, поэтому провал декодирования — это реальный
+// рассинхрон схемы (передеплой без регенерации клиента) или порча данных. Молча
+// ронять такой аккаунт из списка нельзя: «мультисигом меньше» без единого следа.
+function warnUndecodable(kind: string, pubkey: Address, e: unknown): null {
+  console.warn(`Не удалось декодировать ${kind} ${pubkey} — пропущен. Причина:`, e);
+  return null;
+}
+
 export async function fetchOwnedMultisigs(owner: Address): Promise<MultisigView[]> {
   const dec = getMultisigDecoder();
   const res = await getRpc()
     .getProgramAccounts(PROGRAM_ID, {
+      commitment: READ_COMMITMENT,
       encoding: "base64",
       filters: [discriminatorFilter(MULTISIG_DISCRIMINATOR)],
     })
@@ -62,8 +71,8 @@ export async function fetchOwnedMultisigs(owner: Address): Promise<MultisigView[
     .map((a) => {
       try {
         return { address: a.pubkey, data: dec.decode(decodeB64(a.account.data[0])) };
-      } catch {
-        return null;
+      } catch (e) {
+        return warnUndecodable("мультисиг", a.pubkey, e);
       }
     })
     .filter((x): x is MultisigView => x !== null);
@@ -74,6 +83,7 @@ export async function fetchProposals(multisig: Address): Promise<ProposalView[]>
   const dec = getTransactionDecoder();
   const res = await getRpc()
     .getProgramAccounts(PROGRAM_ID, {
+      commitment: READ_COMMITMENT,
       encoding: "base64",
       // Transaction.multisig — первое поле после дискриминатора → offset 8.
       filters: [discriminatorFilter(TRANSACTION_DISCRIMINATOR), addressFilter(8n, multisig)],
@@ -83,8 +93,8 @@ export async function fetchProposals(multisig: Address): Promise<ProposalView[]>
     .map((a) => {
       try {
         return { address: a.pubkey, data: dec.decode(decodeB64(a.account.data[0])) };
-      } catch {
-        return null;
+      } catch (e) {
+        return warnUndecodable("предложение", a.pubkey, e);
       }
     })
     .filter((x): x is ProposalView => x !== null);

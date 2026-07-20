@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { MultisigView } from '@/lib/multisig';
-import { shortAddress } from '@/lib/format';
+import { pluralOwners, shortAddress } from '@/lib/format';
 
 /** Карточка мультисига на дашборде: адрес-ссылка, порог M-of-N, число владельцев. */
 export function MultisigCard({ view }: { view: MultisigView }) {
@@ -24,7 +24,7 @@ export function MultisigCard({ view }: { view: MultisigView }) {
         </span>
       </div>
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        {ownersCount} {ownersCount === 1 ? 'владелец' : 'владельцев'} · порог {threshold}
+        {ownersCount} {pluralOwners(ownersCount)} · порог {threshold}
       </p>
     </Link>
   );

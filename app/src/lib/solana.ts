@@ -7,6 +7,14 @@ const WS_URL = process.env.NEXT_PUBLIC_SOLANA_WS_URL ?? "ws://127.0.0.1:8900";
 
 export const PROGRAM_ID = MAGICAN_SOLANA_MULTISIG_PROGRAM_ADDRESS;
 
+/**
+ * Commitment для ВСЕХ чтений. Без него RPC отвечает по `finalized` — это ~13 секунд
+ * отставания: только что созданный мультисиг выглядел «не найден», а свежий голос
+ * после approve не появлялся, будто подпись не прошла. Отправку подтверждаем тем же
+ * уровнем, чтобы прочитанное не отставало от отправленного.
+ */
+export const READ_COMMITMENT = 'confirmed' as const;
+
 let _rpc: ReturnType<typeof createSolanaRpc> | null = null;
 let _subs: ReturnType<typeof createSolanaRpcSubscriptions> | null = null;
 

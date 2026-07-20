@@ -13,6 +13,9 @@ import { useSubmitTx } from '@/lib/tx';
 
 type Built = { ix: Instruction; pda: Address; signer: TransactionSigner };
 
+/** Seed — u64 в сидах PDA; выше кодировщик инструкции не примет. */
+const MAX_U64 = 18_446_744_073_709_551_615n;
+
 /** Клиентская валидация до сборки инструкции — чтобы не гонять заведомо битые данные. */
 function validate(owners: string[], threshold: number): string | null {
   const trimmed = owners.map((o) => o.trim());
@@ -65,7 +68,13 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
     invalidate();
   };
   const removeOwner = (i: number) => {
-    setOwners((prev) => prev.filter((_, idx) => idx !== i));
+    setOwners((prev) => {
+      const next = prev.filter((_, idx) => idx !== i);
+      // Порог не может превышать число владельцев: без клампа форма молча
+      // застревала в ошибке «порог должен быть от 1 до N» после удаления.
+      setThreshold((t) => Math.min(t, next.length));
+      return next;
+    });
     invalidate();
   };
 
@@ -95,10 +104,16 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
     }
   }
 
+  // Между «транзакция подтвердилась» и «страница сменилась» есть окно: sending уже
+  // false, а built и sim.ok ещё нет — кнопка оживала, и второй клик отправлял ту же
+  // инструкцию с тем же seed, получая «account already in use». Замок держим до ухода.
+  const [leaving, setLeaving] = useState(false);
+
   async function onCreate() {
     if (!built) return;
     try {
       await submit.run([built.ix], built.signer);
+      setLeaving(true);
       router.push(`/m/${built.pda}`);
     } catch {
       // ошибку показывает submit.sendError ниже
@@ -106,10 +121,15 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
   }
 
   const { sim, sending, sendError } = submit;
-  const busy = sim.loading || sending;
+  const busy = sim.loading || sending || leaving;
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Пока транзакция летит, поля заперты: любая правка зовёт invalidate(), а он
+          гасит сухой прогон и стирает sendError — форма показывала бы «Проверить»
+          и пустой экран ошибок поверх уже подписанной отправки.
+          `contents` — чтобы fieldset не вмешивался в раскладку. */}
+      <fieldset disabled={sending || leaving} className="contents">
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -133,7 +153,7 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
               readOnly={i === 0}
               spellCheck={false}
               placeholder="Адрес владельца (base58)"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 outline-none focus:border-indigo-500 read-only:bg-zinc-100 read-only:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:read-only:bg-zinc-800"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 outline-none focus:border-indigo-500 disabled:opacity-50 read-only:bg-zinc-100 read-only:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:read-only:bg-zinc-800"
             />
             {i === 0 ? (
               <span className="shrink-0 rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
@@ -167,7 +187,7 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
               setThreshold(Number(e.target.value));
               invalidate();
             }}
-            className="w-24 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="w-24 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-indigo-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -176,13 +196,15 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
             value={seed.toString()}
             onChange={(e) => {
               const v = e.target.value.trim();
-              if (v === '' || /^\d+$/.test(v)) {
+              // Seed уходит в u64-кодировщик: без границы он бросал сырую строку
+              // кодека вместо понятного отказа. Лишние цифры просто не принимаем.
+              if (v === '' || (/^\d+$/.test(v) && BigInt(v) <= MAX_U64)) {
                 setSeed(v === '' ? 0n : BigInt(v));
                 invalidate();
               }
             }}
             spellCheck={false}
-            className="w-56 rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 outline-none focus:border-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="w-56 rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-zinc-900 outline-none focus:border-indigo-500 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
           />
         </div>
       </section>
@@ -243,6 +265,7 @@ export function CreateMultisigForm({ session }: { session: WalletSession }) {
           </button>
         )}
       </div>
+      </fieldset>
     </div>
   );
 }
