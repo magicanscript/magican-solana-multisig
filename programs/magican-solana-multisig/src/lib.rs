@@ -50,11 +50,11 @@ pub mod magican_solana_multisig {
     /// Changes the owner set and increments `owner_set_seqno`.
     /// Reachable only through a self-CPI from `execute_transaction` (see `Auth`).
     pub fn set_owners(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
-        governance::set_owners(ctx, owners)
+        governance::set_owners_handler(ctx, owners)
     }
 
     /// Changes the threshold. Reachable only through a self-CPI from `execute_transaction`.
     pub fn change_threshold(ctx: Context<Auth>, threshold: u8) -> Result<()> {
-        governance::change_threshold(ctx, threshold)
+        governance::change_threshold_handler(ctx, threshold)
     }
 }

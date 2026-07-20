@@ -19,7 +19,10 @@ pub struct Auth<'info> {
     pub multisig_signer: Signer<'info>,
 }
 
-pub fn set_owners(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
+// The `_handler` suffix is not cosmetic: `instructions.rs` glob-re-exports this module, and a
+// bare `set_owners` would collide with the `#[program]` function of the same name in lib.rs
+// (ambiguous_glob_reexports).
+pub fn set_owners_handler(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
     require!(!owners.is_empty(), ErrorCode::InvalidThreshold);
     require!(owners.len() <= MAX_OWNERS, ErrorCode::TooManyOwners);
     assert_unique_owners(&owners)?;
@@ -43,7 +46,7 @@ pub fn set_owners(ctx: Context<Auth>, owners: Vec<Pubkey>) -> Result<()> {
     Ok(())
 }
 
-pub fn change_threshold(ctx: Context<Auth>, threshold: u8) -> Result<()> {
+pub fn change_threshold_handler(ctx: Context<Auth>, threshold: u8) -> Result<()> {
     let multisig = &mut ctx.accounts.multisig;
     require!(
         threshold >= 1 && (threshold as usize) <= multisig.owners.len(),
