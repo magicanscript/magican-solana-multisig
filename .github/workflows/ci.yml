@@ -56,7 +56,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20 # next 16 requires >= 20.9
+          # 22, not 20: next 16 wants >= 20.9, but the root yarn.lock pulls commander@15
+          # (via codama), whose engines field demands >= 22.12 — and yarn 1 enforces engines
+          # on the whole lockfile at resolve time, before devDependencies are filtered out.
+          # Node 20 also went EOL in April 2026.
+          node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
 
